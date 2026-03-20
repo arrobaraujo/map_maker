@@ -8,6 +8,7 @@ class GTFSProcessor:
         self.routes = pd.DataFrame()
         self.trips = pd.DataFrame()
         self.shapes = pd.DataFrame()
+        self.coords_cache = {}  # Cache: {shape_id: [(lat, lon), ...]}
         self.load_data()
 
     def load_data(self):
@@ -16,17 +17,20 @@ class GTFSProcessor:
             # Load routes
             if 'routes.txt' in z.namelist():
                 with z.open('routes.txt') as f:
-                    self.routes = pd.read_csv(f, dtype={'route_id': str, 'route_short_name': str, 'route_long_name': str})
+                    self.routes = pd.read_csv(f, dtype={'route_id': str, 'route_short_name': str, 'route_long_name': str}, 
+                                            encoding='utf-8-sig', on_bad_lines='skip')
             
             # Load trips (to link routes to shapes and get headsigns/directions)
             if 'trips.txt' in z.namelist():
                 with z.open('trips.txt') as f:
-                    self.trips = pd.read_csv(f, dtype={'route_id': str, 'trip_id': str, 'shape_id': str, 'trip_headsign': str, 'direction_id': str})
+                    self.trips = pd.read_csv(f, dtype={'route_id': str, 'trip_id': str, 'shape_id': str, 'trip_headsign': str, 'direction_id': str}, 
+                                           encoding='utf-8-sig', on_bad_lines='skip')
             
             # Load shapes
             if 'shapes.txt' in z.namelist():
                 with z.open('shapes.txt') as f:
-                    self.shapes = pd.read_csv(f, dtype={'shape_id': str})
+                    self.shapes = pd.read_csv(f, dtype={'shape_id': str}, 
+                                            encoding='utf-8-sig', on_bad_lines='skip')
                     # Sort by sequence
                     self.shapes['shape_pt_sequence'] = pd.to_numeric(self.shapes['shape_pt_sequence'], errors='coerce').fillna(0).astype(int)
                     self.shapes.sort_values(['shape_id', 'shape_pt_sequence'], inplace=True)
@@ -66,7 +70,10 @@ class GTFSProcessor:
         return sorted(route_list, key=lambda x: x['display_name'])
 
     def get_shape_coordinates(self, shape_id):
-        """Returns a list of (lat, lon) tuples for a given shape_id."""
+        """Returns a list of (lat, lon) tuples for a given shape_id with caching."""
+        if shape_id in self.coords_cache:
+            return self.coords_cache[shape_id]
+            
         if self.shapes.empty:
             return []
         
@@ -75,4 +82,5 @@ class GTFSProcessor:
             return []
         
         coords = list(zip(shape_data['shape_pt_lat'], shape_data['shape_pt_lon']))
+        self.coords_cache[shape_id] = coords
         return coords

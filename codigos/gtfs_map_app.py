@@ -5,6 +5,8 @@ import sys
 import os
 import time
 from PIL import Image, ImageGrab
+import geopandas as gpd
+from shapely.geometry import LineString
 
 # High DPI awareness for Windows (fixes blurry text and "black" screenshots)
 try:
@@ -33,6 +35,11 @@ class GTFSMapApp(ctk.CTk):
         # UI Appearance
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("blue")
+
+        # Tile Cache Setup
+        self.tile_cache_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "map_tiles_cache")
+        if not os.path.exists(self.tile_cache_path):
+            os.makedirs(self.tile_cache_path)
 
         self.setup_ui()
 
@@ -118,6 +125,9 @@ class GTFSMapApp(ctk.CTk):
         self.save_btn = ctk.CTkButton(self.controls_frame, text="💾 Salvar", width=90, fg_color="#27AE60", hover_color="#219150", command=self.save_map)
         self.save_btn.grid(row=0, column=8, padx=10, pady=15)
 
+        self.export_btn = ctk.CTkButton(self.controls_frame, text="🌐 Exportar SIG", width=110, fg_color="#8E44AD", hover_color="#9B59B6", command=self.export_sig)
+        self.export_btn.grid(row=0, column=9, padx=10, pady=15)
+
         # Map View Area (contains map + legend overlay)
         self.map_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.map_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
@@ -186,6 +196,7 @@ class GTFSMapApp(ctk.CTk):
             path_obj = self.map_widget.set_path(coords, color=color, width=3)
             
             self.active_layers[shape_id] = {
+                'shape_id': shape_id,
                 'display_name': route['display_name'],
                 'short_name': route.get('short_name', ''),
                 'long_name': route.get('long_name', ''),
@@ -324,7 +335,7 @@ class GTFSMapApp(ctk.CTk):
             groups[sn].append(data)
 
         # Build entries to display
-        entries = [] # (color, text)
+        entries = [] # (color, text, list_of_shape_ids)
         for sn, layers in groups.items():
             color_groups = {} # color -> [data, ...]
             for l in layers:
@@ -333,16 +344,16 @@ class GTFSMapApp(ctk.CTk):
                 color_groups[c].append(l)
             
             for color, sub_layers in color_groups.items():
+                sids = [sl['shape_id'] for sl in sub_layers]
                 if len(sub_layers) > 1:
                     # Same color for multiple directions -> Use Vista (long_name)
-                    # We assume long_name is consistent for the same short_name
                     text = f"{sn} - {sub_layers[0].get('long_name', '')}".strip(" - ")
                 else:
                     # Different color or only one direction -> Use display_name (Headsign + Direction)
                     text = sub_layers[0]['display_name']
-                entries.append((color, text))
+                entries.append((color, text, sids))
 
-        for color, display_text in entries:
+        for color, display_text, shape_ids in entries:
             row = ctk.CTkFrame(self.legend_frame, fg_color="transparent")
             row.pack(fill="x", padx=15, pady=5)
             
@@ -354,22 +365,65 @@ class GTFSMapApp(ctk.CTk):
             lbl = ctk.CTkLabel(row, text=display_text, font=ctk.CTkFont(size=13), text_color="black")
             lbl.pack(side="left", padx=5)
 
+    def export_sig(self):
+        """Export active layers to GeoPackage or Shapefile."""
+        if not self.active_layers:
+            messagebox.showwarning("Aviso", "Não há camadas ativas para exportar.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".gpkg",
+            filetypes=[("GeoPackage", "*.gpkg"), ("Shapefile", "*.shp")]
+        )
+        if not file_path: return
+
+        try:
+            features = []
+            for shape_id, data in self.active_layers.items():
+                # Convert (lat, lon) to (lon, lat) for GIS
+                coords_lonlat = [(c[1], c[0]) for c in data['coords']]
+                geom = LineString(coords_lonlat)
+                
+                features.append({
+                    'geometry': geom,
+                    'shape_id': shape_id,
+                    'name': data['display_name'],
+                    'short_name': data['short_name'],
+                    'long_name': data.get('long_name', ''),
+                    'color': data['color']
+                })
+            
+            gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
+            
+            if file_path.endswith(".shp"):
+                # Shapefile has column name limits (10 chars)
+                gdf.to_file(file_path, driver="ESRI Shapefile")
+            else:
+                gdf.to_file(file_path, driver="GPKG")
+            
+            messagebox.showinfo("Sucesso", f"Dados SIG exportados com sucesso para:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("Erro na Exportação", f"Falha ao exportar dados SIG: {e}")
+
     def change_basemap(self, choice):
+        # Common cache path for all servers
+        kwargs = {"tile_cache_path": self.tile_cache_path}
+
         if choice == "OpenStreetMap":
-            self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
+            self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", **kwargs)
         elif choice == "Google Normal":
-            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22, **kwargs)
         elif choice == "Esri Light":
-            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}")
+            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", **kwargs)
         elif choice == "Esri Dark":
-            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}")
+            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", **kwargs)
         elif choice == "Carto Light":
-            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png")
+            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", **kwargs)
         elif choice == "Carto Dark":
-            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png")
+            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", **kwargs)
         elif choice == "Rio PGeo3":
             # Note: This server uses EPSG:31983, which may cause minor alignment issues with standard Web Mercator data
-            self.map_widget.set_tile_server("https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Hosted/Mapa_B%C3%A1sico_Cinza_Claro/MapServer/tile/{z}/{y}/{x}")
+            self.map_widget.set_tile_server("https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Hosted/Mapa_B%C3%A1sico_Cinza_Claro/MapServer/tile/{z}/{y}/{x}", **kwargs)
 
     def save_map(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".png", 
