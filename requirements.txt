@@ -1,0 +1,7 @@
+customtkinter
+tkintermapview
+pandas
+geopandas
+shapely
+pyogrio
+Pillow

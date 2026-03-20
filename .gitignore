@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Data
+*.zip
+*.csv
+*.parquet
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.gpkg
+*.geojson
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project
+gtfs_data/
+temp/
