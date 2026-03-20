@@ -1,49 +1,35 @@
-# Walkthrough - GTFS Map GUI
+# Adição da Camada de Mapa PGeo3 (Rio de Janeiro)
 
-This application allows you to visualize and customize GTFS route itinerários using a modern graphical interface.
+Agora é possível utilizar o mapa base oficial da Prefeitura do Rio de Janeiro diretamente no aplicativo **GTFS Map Maker**.
 
-## Prerequisites
-Ensure you have the required libraries installed:
-```bash
-pip install customtkinter tkintermapview pandas geopandas shapely pyogrio
-```
+## Mudanças Realizadas
 
-## How to Use
+### [gtfs_map_app.py](file:///c:/R_SMTR/projetos/map_maker/codigos/gtfs_map_app.py)
 
-### 1. Launching the App
-Run the main script:
-```bash
-python gtfs_map_app.py
-```
+1.  **Novo Item no Menu:** Adicionada a opção **"Rio PGeo3"** no menu suspenso de mapas base no canto superior direito.
+2.  **Configuração de Tiles:** O servidor `pgeo3.rio.rj.gov.br` foi configurado como fonte de tiles para a nova opção.
+3.  **Correção da Legenda:** A legenda foi movida para dentro do widget do mapa com a função `lift()`, garantindo que ela apareça sempre acima da camada de mapa.
+4.  **Captura de Tela Limpa:** Implementada lógica automática que oculta os botões de zoom (+ e -) e os créditos apenas durante o processo de salvar o mapa (`Save Map`), restaurando-os logo em seguida.
+5.  **Mapa Padrão:** O mapa **"Carto Light"** agora é selecionado automaticamente tanto na visualização quanto no menu ao abrir o aplicativo.
+6.  **Erro Técnico Corrigido:** Eliminado o erro `TclError: unknown option "-padx"` que ocorria ao tentar carregar a legenda.
+7.  **Remoção de Camadas (X):** Adicionado um botão "✕" vermelho ao lado de cada camada na lista lateral, permitindo remover rotas individualmente sem precisar procurá-las na lista principal.
+8.  **Reorganização (↑/↓):** Os botões de subir e descer camadas foram movidos da barra superior para a lateral, ficando logo acima da lista, o que facilita o controle de sobreposição.
+9.  **Design da Legenda:** A legenda agora é branca com texto preto e bordas arredondadas finas, posicionada no canto inferior esquerdo e integrada diretamente ao widget do mapa. O tamanho geral foi **aumentado em 20%** para garantir legibilidade máxima.
+10. **Refinamento do Sidebar:** A barra lateral foi alargada e as proporções entre a lista de busca e as camadas ativas foram reequilibradas para maior conforto visual.
+11. **Legenda Inteligente:**
+    - Se a ida e volta de uma linha tiverem a **MESMA COR**: A legenda unifica os registros e exibe apenas a "Vista" (nome longo da linha).
+    - Se tiverem **CORES DIFERENTES**: A legenda detalha cada sentido com seu destino (Headsign) e direção (Ida/Volta), permitindo identificação individual.
+12. **Exportação de Alta Qualidade (DPI):** Adicionado um controle de qualidade na barra superior. Ao definir um DPI mais alto (ex: 300), o aplicativo redimensiona automaticamente a imagem final (PNG/PDF) para garantir nitidez profissional em impressões ou zooms.
+13. **Suporte a route_long_name:** O sistema utiliza os nomes longos das rotas do GTFS para as legendas unificadas.
 
-### 2. Loading GTFS Data
-Click the **"Carregar GTFS (.zip)"** button and select your GTFS file. The app will parse `routes.txt`, `trips.txt`, and `shapes.txt`.
+## Como Testar
 
-### 3. Selecting Routes
-- Use the **Search Bar** to filter specific lines by name.
-- Click a route in the **"Rotas Disponíveis"** list to add it to the map.
-- Active routes are highlighted in the list.
+1.  Abra o aplicativo executando `python codigos/gtfs_map_app.py`.
+2.  No seletor de mapa base (canto superior direito), escolha **"Rio PGeo3"**.
+3.  O mapa deve carregar o fundo cinza claro oficial da prefeitura.
 
-### 4. Customizing Styles
-- Select an active layer from the **"Camadas Ativas"** list.
-- Click **"Cor"** to open a color picker.
-- Use the **"Espessura"** slider to adjust the line width.
+> [!NOTE]
+> Conforme discutido no plano de implementação, esta camada utiliza a projeção SIRGAS 2000. Embora funcione no aplicativo, você pode notar um leve desalinhamento (alguns metros) entre o desenho da rota do GTFS e as ruas do mapa de fundo.
 
-### 5. Managing Layers
-- Use the **↑** and **↓** buttons to move the selected layer up or down. Layers at the top of the list will be drawn last (on top of others).
-- Click **"Focar"** to zoom and center the map on all active routes.
-- Click **"Limpar"** to remove all layers.
-
-### 6. Saving the Map
-- Click the **"Salvar"** button in the top bar.
-- Choose between **PNG** or **PDF** format and select the destination.
-- *Note: Requires `Pillow` installed.*
-
-### 7. Changing Basemaps
-- Choose between **Esri Light/Dark**, **Carto Light/Dark**, **OpenStreetMap**, or **Google** options from the dropdown menu.
-- The "Light" options provide a cleaner background for better visibility of transit lines.
-
-## Key Files
-- [gtfs_map_app.py](file:///c:/R_SMTR/projetos/mapas/codigos/gtfs_map_app.py): Main GUI logic.
-- [gtfs_processor.py](file:///c:/R_SMTR/projetos/mapas/codigos/gtfs_processor.py): GTFS data handling.
-- [README.md](file:///c:/R_SMTR/projetos/mapas/README.md): Project overview.
+---
+**Walkthrough concluído.**

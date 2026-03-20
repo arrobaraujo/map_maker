@@ -16,7 +16,7 @@ class GTFSProcessor:
             # Load routes
             if 'routes.txt' in z.namelist():
                 with z.open('routes.txt') as f:
-                    self.routes = pd.read_csv(f, dtype={'route_id': str, 'route_short_name': str})
+                    self.routes = pd.read_csv(f, dtype={'route_id': str, 'route_short_name': str, 'route_long_name': str})
             
             # Load trips (to link routes to shapes and get headsigns/directions)
             if 'trips.txt' in z.namelist():
@@ -59,6 +59,7 @@ class GTFSProcessor:
                 'shape_id': row['shape_id'],
                 'display_name': display_name,
                 'short_name': short_name,
+                'long_name': str(row.get('route_long_name', '')),
                 'direction': dir_label
             })
         

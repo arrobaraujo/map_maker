@@ -1,39 +1,21 @@
-# Implementation Plan - GTFS Map GUI
+# Adição de Controle de Qualidade e Refinamentos de Legenda
 
-This project aims to create a Python desktop application that allows users to load GTFS files, select specific routes, customize their appearance on a map, and manage layer ordering.
+O objetivo é permitir a exportação de mapas em alta resolução (DPI configurável) e melhorar a legibilidade da legenda através de um aumento de escala.
 
 ## Proposed Changes
 
-### [GTFS Map App Component]
+#### [MODIFY] [gtfs_map_app.py](file:///c:/R_SMTR/projetos/map_maker/codigos/gtfs_map_app.py)
 
-#### [NEW] [GTFS Map App](file:///c:/R_SMTR/projetos/mapas/gtfs_map_app.py)
-
-- **GTFS Loader**: Reads `shapes.txt`, `routes.txt`, and `trips.txt` from a ZIP file.
-- **Data Model**: Stores route shapes as `geopandas` geometries or simple coordinate lists.
-- **GUI (CustomTkinter)**:
-    - Sidebar for route selection (searchable list).
-    - Style controls (color picker, thickness slider).
-    - Layer manager (move up/down, toggle visibility).
-    - Basemap selector (OpenStreetMap, Satellite, etc.).
-- **Map View (TkinterMapView)**:
-    - Interactive map for horizontal/vertical navigation.
-    - Dynamic rendering of selected routes with custom styles.
-
-## Technology Stack
-- `CustomTkinter` (Modern UI)
-- `TkinterMapView` (Interactive Maps in Tkinter)
-- `Pandas` / `GeoPandas` (Data Processing)
-- `Shapely` (Geometry)
+1.  **Controle de DPI:** Adição de `dpi_label` e `dpi_entry` na barra superior.
+2.  **Exportação Escalável:** Atualização de `save_map` para redimensionar a imagem (`Image.resize`) com base no DPI selecionado (Lanczos).
+3.  **Dimensionamento da Legenda:** Aumento de 20% em todas as fontes (11 -> 14, 13 -> 16) e paddings internos da legenda.
+4.  **Sincronização de Legenda:** Refinamento da lógica Cores Iguais (Vista) vs Cores Diferentes (Sentido).
 
 ## Verification Plan
 
-### Automated Tests
-- No automated tests planned for this visual application.
-
 ### Manual Verification
-1. Run `python gtfs_map_app.py`.
-2. Load a sample GTFS zip file.
-3. Select multiple routes and verify they appear on the map.
-4. Change colors and thickness for each route.
-5. Change layer order and verify overlap changes.
-6. Switch between different basemaps.
+1.  Executar o aplicativo: `python codigos/gtfs_map_app.py`.
+2.  Alterar o valor de **Qualidade (DPI)** para 300.
+3.  Salvar o mapa em PNG e PDF.
+4.  Abrir o arquivo gerado e verificar se a resolução está superior à captura de tela padrão.
+5.  Observar a legenda no mapa e confirmar que está maior e mais legível que na versão anterior.

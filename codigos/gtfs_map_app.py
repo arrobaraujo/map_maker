@@ -21,7 +21,7 @@ class GTFSMapApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("GTFS Map Explorer - R_SMTR")
+        self.title("GTFS Map Maker")
         self.geometry("1400x900")
 
         # Data state
@@ -42,11 +42,12 @@ class GTFSMapApp(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         # Left Sidebar
-        self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0)
+        self.sidebar = ctk.CTkFrame(self, width=340, corner_radius=0)
         self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_rowconfigure(4, weight=1)
+        self.sidebar.grid_rowconfigure(3, weight=2) # Routes list
+        self.sidebar.grid_rowconfigure(4, weight=1) # Active layers frame
 
-        self.logo_label = ctk.CTkLabel(self.sidebar, text="GTFS Map Explorer", font=ctk.CTkFont(size=22, weight="bold"))
+        self.logo_label = ctk.CTkLabel(self.sidebar, text="GTFS Map Maker", font=ctk.CTkFont(size=22, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(30, 10))
 
         self.load_button = ctk.CTkButton(self.sidebar, text="📁 Carregar GTFS (.zip)", 
@@ -54,11 +55,11 @@ class GTFSMapApp(ctk.CTk):
                                         command=self.load_gtfs)
         self.load_button.grid(row=1, column=0, padx=20, pady=20)
 
-        self.search_entry = ctk.CTkEntry(self.sidebar, placeholder_text="🔍 Filtrar rotas...")
+        self.search_entry = ctk.CTkEntry(self.sidebar, placeholder_text="🔍 Filtrar linhas...")
         self.search_entry.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
         self.search_entry.bind("<KeyRelease>", self.filter_routes)
 
-        self.route_listbox = ctk.CTkScrollableFrame(self.sidebar, label_text="Rotas Disponíveis")
+        self.route_listbox = ctk.CTkScrollableFrame(self.sidebar, label_text="Linhas Disponíveis")
         self.route_listbox.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
 
         # Active Layers Section
@@ -70,7 +71,14 @@ class GTFSMapApp(ctk.CTk):
         self.layer_label = ctk.CTkLabel(self.layer_frame, text="Camadas Ativas", font=ctk.CTkFont(size=14, weight="bold"))
         self.layer_label.grid(row=0, column=0, padx=0, pady=(0, 5), sticky="w")
 
-        self.layer_listbox = ctk.CTkScrollableFrame(self.layer_frame, label_text="Ordem: Cima -> Baixo", height=200)
+        self.order_frame = ctk.CTkFrame(self.layer_frame, fg_color="transparent")
+        self.order_frame.grid(row=0, column=1, pady=(0, 5), sticky="e")
+        self.up_btn = ctk.CTkButton(self.order_frame, text="↑", width=30, height=24, command=lambda: self.move_layer(-1))
+        self.up_btn.pack(side="left", padx=2)
+        self.down_btn = ctk.CTkButton(self.order_frame, text="↓", width=30, height=24, command=lambda: self.move_layer(1))
+        self.down_btn.pack(side="left", padx=2)
+
+        self.layer_listbox = ctk.CTkScrollableFrame(self.layer_frame, label_text="Ordem: Cima > Baixo", height=200)
         self.layer_listbox.grid(row=1, column=0, sticky="nsew")
 
         # Right Main Area
@@ -86,30 +94,29 @@ class GTFSMapApp(ctk.CTk):
         self.color_btn = ctk.CTkButton(self.controls_frame, text="🎨 Cor", width=70, command=self.choose_color)
         self.color_btn.grid(row=0, column=0, padx=5, pady=15)
 
-        self.width_label = ctk.CTkLabel(self.controls_frame, text="Espessura: 3")
+        self.width_label = ctk.CTkLabel(self.controls_frame, text="Espessura do shape: 3")
         self.width_label.grid(row=0, column=1, padx=(5, 0), pady=15)
         self.width_slider = ctk.CTkSlider(self.controls_frame, from_=1, to=15, number_of_steps=14, width=100, command=self.update_style)
         self.width_slider.set(3)
         self.width_slider.grid(row=0, column=2, padx=(2, 5), pady=15)
 
-        self.order_frame = ctk.CTkFrame(self.controls_frame, fg_color="transparent")
-        self.order_frame.grid(row=0, column=3, padx=5)
-        self.up_btn = ctk.CTkButton(self.order_frame, text="↑", width=35, command=lambda: self.move_layer(-1))
-        self.up_btn.pack(side="left", padx=2)
-        self.down_btn = ctk.CTkButton(self.order_frame, text="↓", width=35, command=lambda: self.move_layer(1))
-        self.down_btn.pack(side="left", padx=2)
-
-        self.fit_btn = ctk.CTkButton(self.controls_frame, text="📍 Focar", width=70, command=self.fit_map_buffer)
-        self.fit_btn.grid(row=0, column=4, padx=5, pady=15)
+        self.fit_btn = ctk.CTkButton(self.controls_frame, text="📍 Focar Mapa", width=70, command=self.fit_map_buffer)
+        self.fit_btn.grid(row=0, column=3, padx=5, pady=15)
 
         self.clear_btn = ctk.CTkButton(self.controls_frame, text="🗑️ Limpar", width=70, fg_color="#E74C3C", hover_color="#C0392B", command=self.clear_all_layers)
-        self.clear_btn.grid(row=0, column=5, padx=5, pady=15)
+        self.clear_btn.grid(row=0, column=4, padx=5, pady=15)
 
-        self.basemap_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Esri Light", "Esri Dark", "Carto Light", "Carto Dark", "OpenStreetMap", "Google Normal"], width=130, command=self.change_basemap)
-        self.basemap_menu.grid(row=0, column=6, padx=5, pady=15)
+        self.basemap_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Carto Light", "Carto Dark", "Esri Light", "Esri Dark", "OpenStreetMap", "Google Normal", "Rio PGeo3"], width=130, command=self.change_basemap)
+        self.basemap_menu.grid(row=0, column=5, padx=5, pady=15)
+
+        self.dpi_label = ctk.CTkLabel(self.controls_frame, text="Qualidade (DPI):")
+        self.dpi_label.grid(row=0, column=6, padx=(10, 2), pady=15)
+        self.dpi_entry = ctk.CTkEntry(self.controls_frame, width=50)
+        self.dpi_entry.insert(0, "150")
+        self.dpi_entry.grid(row=0, column=7, padx=(2, 10), pady=15)
 
         self.save_btn = ctk.CTkButton(self.controls_frame, text="💾 Salvar", width=90, fg_color="#27AE60", hover_color="#219150", command=self.save_map)
-        self.save_btn.grid(row=0, column=7, padx=10, pady=15)
+        self.save_btn.grid(row=0, column=8, padx=10, pady=15)
 
         # Map View Area (contains map + legend overlay)
         self.map_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
@@ -122,11 +129,13 @@ class GTFSMapApp(ctk.CTk):
         self.map_widget.set_position(-22.9068, -43.1729) # Rio de Janeiro
         self.map_widget.set_zoom(12)
         
-        # Legend (Floating Overlay)
-        self.legend_frame = ctk.CTkFrame(self.map_container, fg_color=("#F0F0F0", "#212121"), corner_radius=10, border_width=2, border_color="gray30")
+        # Legend (Floating Overlay) - child of map_widget to avoid container shadow
+        self.legend_frame = ctk.CTkFrame(self.map_widget, fg_color="white", bg_color="transparent", corner_radius=10, border_width=1, border_color="gray80")
         self.legend_frame_visible = False # Shared state
 
-        self.change_basemap("Esri Light") 
+        self.change_basemap("Carto Light")
+        self.basemap_menu.set("Carto Light")
+        self.update_legend() 
 
     def load_gtfs(self):
         file_path = filedialog.askopenfilename(filetypes=[("GTFS ZIP", "*.zip")])
@@ -165,11 +174,7 @@ class GTFSMapApp(ctk.CTk):
     def toggle_route(self, route):
         shape_id = route['shape_id']
         if shape_id in self.active_layers:
-            if 'path_obj' in self.active_layers[shape_id] and self.active_layers[shape_id]['path_obj']:
-                self.active_layers[shape_id]['path_obj'].delete()
-            self.active_layers.pop(shape_id, None)
-            if self.selected_layer_id == shape_id:
-                self.selected_layer_id = None
+            self.remove_layer(shape_id)
         else:
             coords = self.processor.get_shape_coordinates(shape_id)
             if not coords:
@@ -183,6 +188,7 @@ class GTFSMapApp(ctk.CTk):
             self.active_layers[shape_id] = {
                 'display_name': route['display_name'],
                 'short_name': route.get('short_name', ''),
+                'long_name': route.get('long_name', ''),
                 'direction': route.get('direction', ''),
                 'path_obj': path_obj,
                 'color': color,
@@ -195,6 +201,19 @@ class GTFSMapApp(ctk.CTk):
         self.filter_routes()
         self.redraw_all_paths()
         self.update_legend()
+
+    def remove_layer(self, shape_id):
+        if shape_id in self.active_layers:
+            if 'path_obj' in self.active_layers[shape_id] and self.active_layers[shape_id]['path_obj']:
+                self.active_layers[shape_id]['path_obj'].delete()
+            self.active_layers.pop(shape_id, None)
+            if self.selected_layer_id == shape_id:
+                self.selected_layer_id = None
+            
+            self.refresh_layer_list()
+            self.filter_routes()
+            self.redraw_all_paths()
+            self.update_legend()
 
     def clear_all_layers(self):
         for data in self.active_layers.values():
@@ -219,18 +238,33 @@ class GTFSMapApp(ctk.CTk):
     def refresh_layer_list(self):
         for widget in self.layer_listbox.winfo_children():
             widget.destroy()
+        
         for shape_id, data in self.active_layers.items():
             is_sel = self.selected_layer_id == shape_id
-            btn = ctk.CTkButton(self.layer_listbox, text=data['display_name'],
+            
+            # Row container
+            row = ctk.CTkFrame(self.layer_listbox, fg_color="transparent")
+            row.pack(fill="x", padx=2, pady=2)
+            
+            # Layer Selection Button
+            btn = ctk.CTkButton(row, text=data['display_name'],
                                fg_color="#2980B9" if is_sel else "transparent",
+                               hover_color="#3498DB",
+                               anchor="w", height=32,
                                command=lambda s=shape_id: self.select_layer(s))
-            btn.pack(fill="x", padx=5, pady=2)
+            btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
+            
+            # Remove (X) Button
+            del_btn = ctk.CTkButton(row, text="✕", width=30, height=32, 
+                                   fg_color="#C0392B", hover_color="#E74C3C",
+                                   command=lambda s=shape_id: self.remove_layer(s))
+            del_btn.pack(side="right")
 
     def select_layer(self, shape_id):
         self.selected_layer_id = shape_id
         data = self.active_layers[shape_id]
         self.width_slider.set(data['width'])
-        self.width_label.configure(text=f"Espessura: {int(data['width'])}")
+        self.width_label.configure(text=f"Espessura do shape: {int(data['width'])}")
         self.refresh_layer_list()
 
     def choose_color(self):
@@ -244,7 +278,7 @@ class GTFSMapApp(ctk.CTk):
     def update_style(self, value):
         if not self.selected_layer_id: return
         self.active_layers[self.selected_layer_id]['width'] = int(value)
-        self.width_label.configure(text=f"Espessura: {int(value)}")
+        self.width_label.configure(text=f"Espessura do shape: {int(value)}")
         self.redraw_all_paths()
 
     def move_layer(self, direction):
@@ -271,29 +305,53 @@ class GTFSMapApp(ctk.CTk):
         for widget in self.legend_frame.winfo_children():
             widget.destroy()
         
+        # Position: Bottom Left (SW) over map_widget
+        self.legend_frame.place(relx=0.02, rely=0.98, anchor="sw")
+        self.legend_frame.lift()
+
         if not self.active_layers:
-            self.legend_frame.place_forget()
+            lbl = ctk.CTkLabel(self.legend_frame, text="Selecione uma linha\npara ver a legenda", 
+                               font=ctk.CTkFont(size=14, slant="italic"), text_color="black")
+            lbl.pack(padx=15, pady=15)
             return
 
-        self.legend_frame.place(relx=0.98, rely=0.98, anchor="se", padx=10, pady=10)
-        
-        title = ctk.CTkLabel(self.legend_frame, text="Legenda", font=ctk.CTkFont(size=12, weight="bold"))
-        title.pack(padx=10, pady=(5, 2))
-        
-        # Add entry for each active layer (in z-order, assuming last added/top of list is top of legend?)
-        # Actually user might want top drawn at top of legend. 
-        # Our move_layer moves them in the dict. Let's show in drawing order.
-        for data in reversed(list(self.active_layers.values())):
+        # NEW Unified Legend Logic:
+        # Group by short_name
+        groups = {} # short_name -> [data, ...]
+        for data in self.active_layers.values():
+            sn = data['short_name']
+            if sn not in groups: groups[sn] = []
+            groups[sn].append(data)
+
+        # Build entries to display
+        entries = [] # (color, text)
+        for sn, layers in groups.items():
+            color_groups = {} # color -> [data, ...]
+            for l in layers:
+                c = l['color']
+                if c not in color_groups: color_groups[c] = []
+                color_groups[c].append(l)
+            
+            for color, sub_layers in color_groups.items():
+                if len(sub_layers) > 1:
+                    # Same color for multiple directions -> Use Vista (long_name)
+                    # We assume long_name is consistent for the same short_name
+                    text = f"{sn} - {sub_layers[0].get('long_name', '')}".strip(" - ")
+                else:
+                    # Different color or only one direction -> Use display_name (Headsign + Direction)
+                    text = sub_layers[0]['display_name']
+                entries.append((color, text))
+
+        for color, display_text in entries:
             row = ctk.CTkFrame(self.legend_frame, fg_color="transparent")
-            row.pack(fill="x", padx=10, pady=2)
+            row.pack(fill="x", padx=15, pady=5)
             
             # Color indicator
-            color_box = ctk.CTkLabel(row, text=" ■ ", text_color=data['color'], font=ctk.CTkFont(size=20))
+            color_box = ctk.CTkLabel(row, text=" ■ ", text_color=color, font=ctk.CTkFont(size=24))
             color_box.pack(side="left")
             
-            # Text
-            txt = f"{data['display_name']}"
-            lbl = ctk.CTkLabel(row, text=txt, font=ctk.CTkFont(size=11))
+            # Text (Simplified or Detailed)
+            lbl = ctk.CTkLabel(row, text=display_text, font=ctk.CTkFont(size=13), text_color="black")
             lbl.pack(side="left", padx=5)
 
     def change_basemap(self, choice):
@@ -309,6 +367,9 @@ class GTFSMapApp(ctk.CTk):
             self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png")
         elif choice == "Carto Dark":
             self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png")
+        elif choice == "Rio PGeo3":
+            # Note: This server uses EPSG:31983, which may cause minor alignment issues with standard Web Mercator data
+            self.map_widget.set_tile_server("https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Hosted/Mapa_B%C3%A1sico_Cinza_Claro/MapServer/tile/{z}/{y}/{x}")
 
     def save_map(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".png", 
@@ -316,6 +377,9 @@ class GTFSMapApp(ctk.CTk):
         if not file_path: return
 
         try:
+            # Hide zoom buttons and attribution for the screenshot
+            self.map_widget.canvas.itemconfig("button", state='hidden')
+            
             # Important: Give some time for UI to update and ensure it's not obscured
             self.update()
             time.sleep(0.5)
@@ -328,17 +392,33 @@ class GTFSMapApp(ctk.CTk):
             h = self.map_container.winfo_height()
             
             # Use bbox to grab the container which includes map + legend
-            # We capture the screen area
             image = ImageGrab.grab(bbox=(x, y, x + w, y + h), all_screens=True)
             
+            # Handle Quality/DPI
+            try:
+                dpi_val = int(self.dpi_entry.get())
+            except:
+                dpi_val = 150
+            
+            # If high quality, upscale image for better print/zoom
+            # Standard screen is ~96 DPI.
+            scale = dpi_val / 96.0
+            if scale > 1.1:
+                new_size = (int(w * scale), int(h * scale))
+                image = image.resize(new_size, Image.Resampling.LANCZOS)
+
             if file_path.endswith(".pdf"):
-                image.convert("RGB").save(file_path, "PDF", resolution=100.0)
+                image.convert("RGB").save(file_path, "PDF", resolution=float(dpi_val))
             else:
-                image.save(file_path)
+                # For PNG, we can save with DPI metadata
+                image.save(file_path, dpi=(dpi_val, dpi_val))
             
             messagebox.showinfo("Sucesso", f"Mapa salvo em: {file_path}")
         except Exception as e:
             messagebox.showerror("Erro ao Salvar", f"Não foi possível salvar o mapa: {e}\nAtente-se que o Pillow deve estar instalado.")
+        finally:
+            # Restore zoom buttons and attribution
+            self.map_widget.canvas.itemconfig("button", state='normal')
 
 if __name__ == "__main__":
     app = GTFSMapApp()
