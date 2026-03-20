@@ -64,7 +64,8 @@ class GTFSProcessor:
                 'display_name': display_name,
                 'short_name': short_name,
                 'long_name': str(row.get('route_long_name', '')),
-                'direction': dir_label
+                'direction': dir_label,
+                'trip_headsign': headsign
             })
         
         return sorted(route_list, key=lambda x: x['display_name'])

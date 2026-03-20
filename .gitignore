@@ -28,3 +28,4 @@ ENV/
 # Project
 gtfs_data/
 temp/
+map_tiles_cache/

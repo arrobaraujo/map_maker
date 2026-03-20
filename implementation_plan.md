@@ -1,20 +1,17 @@
-# GTFS Map Maker - SIG e Otimizações Técnicas
+# Refinamento de Design e Exportação de Alta Fidelidade
 
-Este plano detalha a implementação de correções técnicas e exportação para arquivos geográficos (GIS).
+O objetivo é eliminar artefatos visuais causados pela captura de tela no modo transparente.
 
 ##Proposed Changes
 
-#### [MODIFY] [gtfs_processor.py](file:///c:/R_SMTR/projetos/map_maker/codigos/gtfs_processor.py)
-- **Cache de Shapes:** Implementar dicionário `coords_cache` para evitar re-processamento repetitivo de geometrias.
-- **Robustez de Leitura:** Adicionar suporte a arquivos com encoding UTF-8-sig e tratamento de linhas corrompidas no `pd.read_csv`.
-
 #### [MODIFY] [gtfs_map_app.py](file:///c:/R_SMTR/projetos/map_maker/codigos/gtfs_map_app.py)
-- **Exportação SIG:** Adicionar botão "Exportar SIG" para salvar camadas ativas nos formatos GeoPackage (.gpkg) e Shapefile (.shp).
-- **Dependência Geopandas:** Utilizar o `geopandas` para criar a estrutura espacial necessária para a exportação.
+- **Motor de Renderização:** Implementar lógica no `save_map` que utiliza `ImageDraw.Draw` e `map_widget.get_canvas_pos` para desenhar as rotas no modo transparente.
+- **Isolamento de Buffer:** Ignorar o `ImageGrab` para evitar a captura de sobreposições do sistema (watermarks).
 
 ## Verification Plan
 
 ### Manual Verification
-1.  Carregar um GTFS e adicionar 3 camadas.
-2.  Clicar em "Exportar SIG" e salvar como .gpkg.
-3.  Alternar repetidamente entre as rotas para validar se o sistema de cache as torna instantâneas.
+1.  Selecionar modo "Transparent".
+2.  Salvar o mapa como PNG.
+3.  Verificar se a cor da borda está sólida (sem fade).
+4.  Confirmar que a marca d'água "Ativar Windows" não está presente na imagem salva.

@@ -1,10 +1,17 @@
-import customtkinter as ctk
 import tkintermapview
+import customtkinter as ctk
 from tkinter import filedialog, messagebox, colorchooser
 import sys
 import os
+
+print("--- DEBUG INFO ---")
+print("GTFS Map Maker - Versão: 1.5.1 (PRO)")
+from datetime import datetime
+print(f"Executado em: {datetime.now()}")
+print(f"TkinterMapView: {tkintermapview.__version__}")
+print("------------------")
 import time
-from PIL import Image, ImageGrab
+from PIL import Image, ImageGrab, ImageDraw, ImageFont
 import geopandas as gpd
 from shapely.geometry import LineString
 
@@ -18,6 +25,7 @@ except Exception:
 # Add current directory to path so it can find gtfs_processor
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from gtfs_processor import GTFSProcessor
+from tkintermapview import decimal_to_osm
 
 class GTFSMapApp(ctk.CTk):
     def __init__(self):
@@ -36,10 +44,11 @@ class GTFSMapApp(ctk.CTk):
         ctk.set_appearance_mode("Dark")
         ctk.set_default_color_theme("blue")
 
-        # Tile Cache Setup
-        self.tile_cache_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "map_tiles_cache")
-        if not os.path.exists(self.tile_cache_path):
-            os.makedirs(self.tile_cache_path)
+        # Tile Cache Directory (Offline Database)
+        self.tile_cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "map_tiles_cache")
+        if not os.path.exists(self.tile_cache_dir):
+            os.makedirs(self.tile_cache_dir)
+        self.db_path = os.path.join(self.tile_cache_dir, "offline_tiles.db")
 
         self.setup_ui()
 
@@ -89,7 +98,7 @@ class GTFSMapApp(ctk.CTk):
         self.layer_listbox.grid(row=1, column=0, sticky="nsew")
 
         # Right Main Area
-        self.main_frame = ctk.CTkFrame(self, fg_color="#1a1a1a") # Solid color for dark mode
+        self.main_frame = ctk.CTkFrame(self, fg_color="#1a1a1a")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.main_frame.grid_rowconfigure(1, weight=1)
         self.main_frame.grid_columnconfigure(0, weight=1)
@@ -113,7 +122,7 @@ class GTFSMapApp(ctk.CTk):
         self.clear_btn = ctk.CTkButton(self.controls_frame, text="🗑️ Limpar", width=70, fg_color="#E74C3C", hover_color="#C0392B", command=self.clear_all_layers)
         self.clear_btn.grid(row=0, column=4, padx=5, pady=15)
 
-        self.basemap_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Carto Light", "Carto Dark", "Esri Light", "Esri Dark", "OpenStreetMap", "Google Normal", "Rio PGeo3"], width=130, command=self.change_basemap)
+        self.basemap_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Carto Light", "Carto Dark", "Esri Light", "Esri Dark", "OpenStreetMap", "Google Normal", "Transparent"], width=130, command=self.change_basemap)
         self.basemap_menu.grid(row=0, column=5, padx=5, pady=15)
 
         self.dpi_label = ctk.CTkLabel(self.controls_frame, text="Qualidade (DPI):")
@@ -128,24 +137,27 @@ class GTFSMapApp(ctk.CTk):
         self.export_btn = ctk.CTkButton(self.controls_frame, text="🌐 Exportar SIG", width=110, fg_color="#8E44AD", hover_color="#9B59B6", command=self.export_sig)
         self.export_btn.grid(row=0, column=9, padx=10, pady=15)
 
-        # Map View Area (contains map + legend overlay)
+        self.legend_switch = ctk.CTkCheckBox(self.controls_frame, text="Mostrar Legenda", command=self.toggle_legend_ui)
+        self.legend_switch.select()
+        self.legend_switch.grid(row=0, column=10, padx=10, pady=15)
+
+        # Map View Area
         self.map_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.map_container.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
         self.map_container.grid_rowconfigure(0, weight=1)
         self.map_container.grid_columnconfigure(0, weight=1)
 
-        self.map_widget = tkintermapview.TkinterMapView(self.map_container, corner_radius=0) 
+        self.map_widget = tkintermapview.TkinterMapView(self.map_container, corner_radius=0, database_path=self.db_path) 
         self.map_widget.grid(row=0, column=0, sticky="nsew")
         self.map_widget.set_position(-22.9068, -43.1729) # Rio de Janeiro
         self.map_widget.set_zoom(12)
         
-        # Legend (Floating Overlay) - child of map_widget to avoid container shadow
+        # Legend (Floating Overlay)
         self.legend_frame = ctk.CTkFrame(self.map_widget, fg_color="white", bg_color="transparent", corner_radius=10, border_width=1, border_color="gray80")
-        self.legend_frame_visible = False # Shared state
 
         self.change_basemap("Carto Light")
         self.basemap_menu.set("Carto Light")
-        self.update_legend() 
+        self.update_legend()
 
     def load_gtfs(self):
         file_path = filedialog.askopenfilename(filetypes=[("GTFS ZIP", "*.zip")])
@@ -201,6 +213,7 @@ class GTFSMapApp(ctk.CTk):
                 'short_name': route.get('short_name', ''),
                 'long_name': route.get('long_name', ''),
                 'direction': route.get('direction', ''),
+                'trip_headsign': route.get('trip_headsign', ''),
                 'path_obj': path_obj,
                 'color': color,
                 'width': 3,
@@ -211,16 +224,16 @@ class GTFSMapApp(ctk.CTk):
         self.refresh_layer_list()
         self.filter_routes()
         self.redraw_all_paths()
-        self.update_legend()
+        if self.legend_switch.get():
+            self.update_legend()
 
     def remove_layer(self, shape_id):
         if shape_id in self.active_layers:
-            if 'path_obj' in self.active_layers[shape_id] and self.active_layers[shape_id]['path_obj']:
+            if self.active_layers[shape_id].get('path_obj'):
                 self.active_layers[shape_id]['path_obj'].delete()
             self.active_layers.pop(shape_id, None)
             if self.selected_layer_id == shape_id:
                 self.selected_layer_id = None
-            
             self.refresh_layer_list()
             self.filter_routes()
             self.redraw_all_paths()
@@ -228,7 +241,7 @@ class GTFSMapApp(ctk.CTk):
 
     def clear_all_layers(self):
         for data in self.active_layers.values():
-            if 'path_obj' in data and data['path_obj']:
+            if data.get('path_obj'):
                 data['path_obj'].delete()
         self.active_layers = {}
         self.selected_layer_id = None
@@ -249,26 +262,15 @@ class GTFSMapApp(ctk.CTk):
     def refresh_layer_list(self):
         for widget in self.layer_listbox.winfo_children():
             widget.destroy()
-        
         for shape_id, data in self.active_layers.items():
             is_sel = self.selected_layer_id == shape_id
-            
-            # Row container
             row = ctk.CTkFrame(self.layer_listbox, fg_color="transparent")
             row.pack(fill="x", padx=2, pady=2)
-            
-            # Layer Selection Button
             btn = ctk.CTkButton(row, text=data['display_name'],
                                fg_color="#2980B9" if is_sel else "transparent",
-                               hover_color="#3498DB",
-                               anchor="w", height=32,
                                command=lambda s=shape_id: self.select_layer(s))
             btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
-            
-            # Remove (X) Button
-            del_btn = ctk.CTkButton(row, text="✕", width=30, height=32, 
-                                   fg_color="#C0392B", hover_color="#E74C3C",
-                                   command=lambda s=shape_id: self.remove_layer(s))
+            del_btn = ctk.CTkButton(row, text="✕", width=30, height=32, command=lambda s=shape_id: self.remove_layer(s))
             del_btn.pack(side="right")
 
     def select_layer(self, shape_id):
@@ -306,174 +308,151 @@ class GTFSMapApp(ctk.CTk):
 
     def redraw_all_paths(self):
         for data in self.active_layers.values():
-            if 'path_obj' in data and data['path_obj']:
+            if data.get('path_obj'):
                 data['path_obj'].delete()
         for shape_id, data in self.active_layers.items():
             data['path_obj'] = self.map_widget.set_path(data['coords'], color=data['color'], width=data['width'])
 
+    def toggle_legend_ui(self):
+        if self.legend_switch.get(): self.update_legend()
+        else: self.legend_frame.place_forget()
+
     def update_legend(self):
-        # Clear previous legend
-        for widget in self.legend_frame.winfo_children():
-            widget.destroy()
-        
-        # Position: Bottom Left (SW) over map_widget
+        for widget in self.legend_frame.winfo_children(): widget.destroy()
+        if not self.legend_switch.get():
+            self.legend_frame.place_forget()
+            return
         self.legend_frame.place(relx=0.02, rely=0.98, anchor="sw")
         self.legend_frame.lift()
-
         if not self.active_layers:
-            lbl = ctk.CTkLabel(self.legend_frame, text="Selecione uma linha\npara ver a legenda", 
-                               font=ctk.CTkFont(size=14, slant="italic"), text_color="black")
-            lbl.pack(padx=15, pady=15)
+            ctk.CTkLabel(self.legend_frame, text="Selecione uma linha", font=ctk.CTkFont(size=14), text_color="black").pack(padx=15, pady=15)
             return
-
-        # NEW Unified Legend Logic:
-        # Group by short_name
-        groups = {} # short_name -> [data, ...]
+        
+        groups = {}
         for data in self.active_layers.values():
             sn = data['short_name']
             if sn not in groups: groups[sn] = []
             groups[sn].append(data)
 
-        # Build entries to display
-        entries = [] # (color, text, list_of_shape_ids)
         for sn, layers in groups.items():
-            color_groups = {} # color -> [data, ...]
+            color_groups = {}
             for l in layers:
                 c = l['color']
                 if c not in color_groups: color_groups[c] = []
                 color_groups[c].append(l)
-            
             for color, sub_layers in color_groups.items():
-                sids = [sl['shape_id'] for sl in sub_layers]
-                if len(sub_layers) > 1:
-                    # Same color for multiple directions -> Use Vista (long_name)
-                    text = f"{sn} - {sub_layers[0].get('long_name', '')}".strip(" - ")
+                layer0 = sub_layers[0]
+                is_circular = "circular" in str(layer0.get('trip_headsign', '')).lower()
+                
+                if is_circular:
+                    # Circular: Number - Long Name (Vista)
+                    text = f"{sn} - {layer0.get('long_name', '')}".strip(" - ")
+                elif len(sub_layers) > 1:
+                    # Multiple directions: Number - Long Name
+                    text = f"{sn} - {layer0.get('long_name', '')}".strip(" - ")
                 else:
-                    # Different color or only one direction -> Use display_name (Headsign + Direction)
-                    text = sub_layers[0]['display_name']
-                entries.append((color, text, sids))
-
-        for color, display_text, shape_ids in entries:
-            row = ctk.CTkFrame(self.legend_frame, fg_color="transparent")
-            row.pack(fill="x", padx=15, pady=5)
-            
-            # Color indicator
-            color_box = ctk.CTkLabel(row, text=" ■ ", text_color=color, font=ctk.CTkFont(size=24))
-            color_box.pack(side="left")
-            
-            # Text (Simplified or Detailed)
-            lbl = ctk.CTkLabel(row, text=display_text, font=ctk.CTkFont(size=13), text_color="black")
-            lbl.pack(side="left", padx=5)
+                    # Specific direction: display_name (Headsign + Direction)
+                    text = layer0['display_name']
+                
+                row = ctk.CTkFrame(self.legend_frame, fg_color="transparent")
+                row.pack(fill="x", padx=15, pady=5)
+                ctk.CTkLabel(row, text=" ■ ", text_color=color, font=ctk.CTkFont(size=24)).pack(side="left")
+                ctk.CTkLabel(row, text=text, font=ctk.CTkFont(size=13), text_color="black").pack(side="left", padx=5)
 
     def export_sig(self):
-        """Export active layers to GeoPackage or Shapefile."""
-        if not self.active_layers:
-            messagebox.showwarning("Aviso", "Não há camadas ativas para exportar.")
-            return
-
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".gpkg",
-            filetypes=[("GeoPackage", "*.gpkg"), ("Shapefile", "*.shp")]
-        )
+        if not self.active_layers: return
+        file_path = filedialog.asksaveasfilename(defaultextension=".gpkg", filetypes=[("GeoPackage", "*.gpkg"), ("Shapefile", "*.shp")])
         if not file_path: return
-
         try:
             features = []
             for shape_id, data in self.active_layers.items():
-                # Convert (lat, lon) to (lon, lat) for GIS
                 coords_lonlat = [(c[1], c[0]) for c in data['coords']]
-                geom = LineString(coords_lonlat)
-                
-                features.append({
-                    'geometry': geom,
-                    'shape_id': shape_id,
-                    'name': data['display_name'],
-                    'short_name': data['short_name'],
-                    'long_name': data.get('long_name', ''),
-                    'color': data['color']
-                })
-            
+                features.append({'geometry': LineString(coords_lonlat), 'shape_id': shape_id, 'name': data['display_name'], 'color': data['color']})
             gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
-            
-            if file_path.endswith(".shp"):
-                # Shapefile has column name limits (10 chars)
-                gdf.to_file(file_path, driver="ESRI Shapefile")
-            else:
-                gdf.to_file(file_path, driver="GPKG")
-            
-            messagebox.showinfo("Sucesso", f"Dados SIG exportados com sucesso para:\n{file_path}")
-        except Exception as e:
-            messagebox.showerror("Erro na Exportação", f"Falha ao exportar dados SIG: {e}")
+            gdf.to_file(file_path, driver="ESRI Shapefile" if file_path.endswith(".shp") else "GPKG")
+            messagebox.showinfo("Sucesso", "Exportado!")
+        except Exception as e: messagebox.showerror("Erro", str(e))
 
     def change_basemap(self, choice):
-        # Common cache path for all servers
-        kwargs = {"tile_cache_path": self.tile_cache_path}
-
         if choice == "OpenStreetMap":
-            self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", **kwargs)
+            self.map_widget.set_tile_server("https://a.tile.openstreetmap.org/{z}/{x}/{y}.png")
         elif choice == "Google Normal":
-            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22, **kwargs)
-        elif choice == "Esri Light":
-            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", **kwargs)
-        elif choice == "Esri Dark":
-            self.map_widget.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}", **kwargs)
-        elif choice == "Carto Light":
-            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png", **kwargs)
-        elif choice == "Carto Dark":
-            self.map_widget.set_tile_server("https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", **kwargs)
-        elif choice == "Rio PGeo3":
-            # Note: This server uses EPSG:31983, which may cause minor alignment issues with standard Web Mercator data
-            self.map_widget.set_tile_server("https://pgeo3.rio.rj.gov.br/arcgis/rest/services/Hosted/Mapa_B%C3%A1sico_Cinza_Claro/MapServer/tile/{z}/{y}/{x}", **kwargs)
+            self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+        elif choice in ["Esri Light", "Esri Dark"]:
+            url = "World_Light_Gray_Base" if "Light" in choice else "World_Dark_Gray_Base"
+            self.map_widget.set_tile_server(f"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/{url}/MapServer/tile/{{z}}/{{y}}/{{x}}")
+        elif choice in ["Carto Light", "Carto Dark"]:
+            url = "light_all" if "Light" in choice else "dark_all"
+            self.map_widget.set_tile_server(f"https://a.basemaps.cartocdn.com/{url}/{{z}}/{{x}}/{{y}}.png")
+        elif choice == "Transparent":
+            self.map_widget.set_tile_server("about:blank")
+            self.map_widget.canvas.configure(bg="#00FF01")
 
     def save_map(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".png", 
-                                                 filetypes=[("PNG Image", "*.png"), ("PDF Document", "*.pdf")])
+        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png"), ("PDF", "*.pdf")])
         if not file_path: return
-
         try:
-            # Hide zoom buttons and attribution for the screenshot
-            self.map_widget.canvas.itemconfig("button", state='hidden')
-            
-            # Important: Give some time for UI to update and ensure it's not obscured
-            self.update()
-            time.sleep(0.5)
-            
-            # Get widget root coordinates
-            # Note: winfo_rootx includes DPI scaling on Windows if SetProcessDpiAwareness(1) is set
-            x = self.map_container.winfo_rootx()
-            y = self.map_container.winfo_rooty()
-            w = self.map_container.winfo_width()
-            h = self.map_container.winfo_height()
-            
-            # Use bbox to grab the container which includes map + legend
-            image = ImageGrab.grab(bbox=(x, y, x + w, y + h), all_screens=True)
-            
-            # Handle Quality/DPI
-            try:
-                dpi_val = int(self.dpi_entry.get())
-            except:
-                dpi_val = 150
-            
-            # If high quality, upscale image for better print/zoom
-            # Standard screen is ~96 DPI.
-            scale = dpi_val / 96.0
-            if scale > 1.1:
-                new_size = (int(w * scale), int(h * scale))
-                image = image.resize(new_size, Image.Resampling.LANCZOS)
+            try: dpi = int(self.dpi_entry.get())
+            except: dpi = 150
+            scale = dpi / 96.0
 
-            if file_path.endswith(".pdf"):
-                image.convert("RGB").save(file_path, "PDF", resolution=float(dpi_val))
+            if self.basemap_menu.get() == "Transparent" and file_path.lower().endswith(".png"):
+                # MODE A: Digital Rendering (No Fade, No Watermark, Manual Coords)
+                w, h = self.map_container.winfo_width(), self.map_container.winfo_height()
+                image = Image.new("RGBA", (int(w*scale), int(h*scale)), (255, 255, 255, 0))
+                draw = ImageDraw.Draw(image)
+
+                # Get tile dimensions for manual projection
+                mw = self.map_widget
+                tile_w = mw.lower_right_tile_pos[0] - mw.upper_left_tile_pos[0]
+                tile_h = mw.lower_right_tile_pos[1] - mw.upper_left_tile_pos[1]
+                ul_x, ul_y = mw.upper_left_tile_pos
+
+                for data in self.active_layers.values():
+                    points = []
+                    for lat, lon in data['coords']:
+                        # Manual Lat/Lon -> Pixel conversion
+                        tx, ty = decimal_to_osm(lat, lon, round(mw.zoom))
+                        px = ((tx - ul_x) / tile_w) * w
+                        py = ((ty - ul_y) / tile_h) * h
+                        points.append((px * scale, py * scale))
+                    
+                    if len(points) > 1:
+                        draw.line(points, fill=data['color'], width=int(data['width'] * scale), joint="curve")
+                
+                if self.legend_switch.get() and self.active_layers:
+                    lw, lh = 400*scale, (60 + len(self.active_layers)*30)*scale
+                    lx, ly = 20*scale, (h*scale) - lh - 20*scale
+                    draw.rectangle([lx, ly, lx+lw, ly+lh], fill="white", outline="gray")
+                    try: font = ImageFont.truetype("arial.ttf", int(14*scale))
+                    except: font = ImageFont.load_default()
+                    curr_y = ly + 15*scale
+                    for data in self.active_layers.values():
+                        is_circular = "circular" in str(data.get('trip_headsign', '')).lower()
+                        if is_circular:
+                            legend_text = f"{data['short_name']} - {data.get('long_name', '')}".strip(" - ")
+                        else:
+                            legend_text = data['display_name']
+                            
+                        draw.rectangle([lx + 15*scale, curr_y, lx + 35*scale, curr_y + 20*scale], fill=data['color'])
+                        draw.text((lx + 45*scale, curr_y), legend_text, fill="black", font=font)
+                        curr_y += 30 * scale
             else:
-                # For PNG, we can save with DPI metadata
-                image.save(file_path, dpi=(dpi_val, dpi_val))
-            
-            messagebox.showinfo("Sucesso", f"Mapa salvo em: {file_path}")
-        except Exception as e:
-            messagebox.showerror("Erro ao Salvar", f"Não foi possível salvar o mapa: {e}\nAtente-se que o Pillow deve estar instalado.")
+                # MODE B: Screen Capture (Standard)
+                self.map_widget.canvas.itemconfig("button", state='hidden')
+                self.update(); time.sleep(0.5)
+                x, y, w, h = self.map_container.winfo_rootx(), self.map_container.winfo_rooty(), self.map_container.winfo_width(), self.map_container.winfo_height()
+                image = ImageGrab.grab(bbox=(x, y, x + w, y + h), all_screens=True)
+                if scale > 1.1: image = image.resize((int(w*scale), int(h*scale)), Image.Resampling.LANCZOS)
+                self.map_widget.canvas.itemconfig("button", state='normal')
+
+            if file_path.endswith(".pdf"): image.convert("RGB").save(file_path, resolution=float(dpi))
+            else: image.save(file_path, dpi=(dpi, dpi))
+            messagebox.showinfo("Sucesso", "Salvo!")
+        except Exception as e: messagebox.showerror("Erro", str(e))
         finally:
-            # Restore zoom buttons and attribution
-            self.map_widget.canvas.itemconfig("button", state='normal')
+            if self.basemap_menu.get() != "Transparent":
+                self.map_widget.canvas.itemconfig("button", state='normal')
 
 if __name__ == "__main__":
-    app = GTFSMapApp()
-    app.mainloop()
+    GTFSMapApp().mainloop()
