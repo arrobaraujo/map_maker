@@ -47,7 +47,7 @@ Para criar um arquivo único `.exe` para Windows:
    ```
 2. Gere o executável com o comando (ajuste o caminho da `.venv` se necessário):
    ```bash
-   pyinstaller --noconsole --onefile --add-data ".venv/Lib/site-packages/customtkinter;customtkinter/" src/app.py
+   python -m PyInstaller --noconsole --onefile --add-data ".venv/Lib/site-packages/customtkinter;customtkinter/" src/app.py
    ```
 3. O arquivo final estará na pasta `dist/`.
 
