@@ -21,16 +21,43 @@ Gerador de mapas de itinerários GTFS com interface gráfica moderna e suporte a
 - Python 3.9+
 - CustomTkinter
 - TkinterMapView
-- Pandas
-- GeoPandas
-- Shapely
-- Pyogrio
-- Pillow (PIL)
+## GTFS Map Maker 🌐🚌
 
-## Como usar
-1. Instale as dependências: `pip install customtkinter tkintermapview pandas geopandas shapely pyogrio pillow`
-2. Execute o aplicativo: `python codigos/gtfs_map_app.py`
-3. Selecione o arquivo GTFS .zip no menu superior.
-4. Escolha o mapa base desejado (ex: "Transparent" para exportação digital perfeita sem fundo).
-5. Use o painel lateral para filtrar e adicionar rotas ao mapa.
-6. Use o checkbox "Mostrar Legenda" para controlar a exibição dos nomes das linhas.
+Ferramenta visual para gerar mapas de itinerários a partir de arquivos GTFS.
+
+## 🚀 Como Executar
+
+1. Certifique-se de ter o Python 3.10+ instalado.
+2. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Execute a aplicação:
+   ```bash
+   python src/app.py
+   ```
+
+## 📂 Estrutura do Projeto
+
+- `src/`: Código fonte da aplicação.
+  - `app.py`: Interface principal e controle.
+  - `processor.py`: Lógica de processamento de dados GTFS.
+  - `utils/`: Utilitários e renderizadores.
+- `tests/`: Testes automatizados.
+- `map_tiles_cache/`: Cache local de mapas para uso offline.
+
+## 🧪 Testes
+
+Para rodar os testes unitários:
+```bash
+pytest tests/
+```
+
+## ✨ Funcionalidades
+
+- Carregamento de GTFS (.zip)
+- Visualização interativa com múltiplos provedores de mapas (Google, OSM, Esri, Carto).
+- Customização de cores e espessura das linhas.
+- Exportação para PNG transparente (Alta Qualidade/DPI).
+- Exportação para SIG (GeoPackage e Shapefile).
+- Sistema de cache de mapas para performance e uso offline.

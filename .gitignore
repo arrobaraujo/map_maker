@@ -6,6 +6,10 @@ __pycache__/
 env/
 venv/
 ENV/
+*.log
+
+# Tests
+.pytest_cache/
 
 # Data
 *.zip
