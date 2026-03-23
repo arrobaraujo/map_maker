@@ -1,12 +1,14 @@
 # GTFS Map Maker
 
+[**English Version**](README_EN.md)
+
 Gerador de mapas de itinerários GTFS com interface gráfica moderna e suporte a SIG.
 
 ## 📥 Download (Versão Pronta)
 
 Se você quer apenas rodar o aplicativo sem precisar instalar o Python:
 1. Acesse a aba [**Releases**](https://github.com/arrobaraujo/map_maker/releases) deste repositório.
-2. Baixe o arquivo `.exe` mais recente.
+2. Baixe o arquivo `.exe` mais recente ao fim da página na seção "Assets".
 3. Execute o arquivo diretamente!
 
 ## ✨ Funcionalidades
