@@ -1,9 +1,53 @@
 import logging
+import math
 from typing import List, Tuple, Dict, Any
 from PIL import Image, ImageDraw, ImageFont
 from tkintermapview import decimal_to_osm
 
 logger = logging.getLogger(__name__)
+
+def simplify_path(points: List[Tuple[float, float]], epsilon: float) -> List[Tuple[float, float]]:
+    """
+    Simplifies a path using the Douglas-Peucker algorithm.
+    
+    Args:
+        points: List of (lat, lon) or (x, y) tuples.
+        epsilon: Distance threshold for simplification.
+        
+    Returns:
+        Simplified list of points.
+    """
+    if len(points) < 3:
+        return points
+
+    def get_distance(p, start, end):
+        """Calculates distance from point p to line segment (start, end)."""
+        if start == end:
+            return math.sqrt((p[0] - start[0])**2 + (p[1] - start[1])**2)
+        
+        # Line equation components
+        x0, y0 = p
+        x1, y1 = start
+        x2, y2 = end
+        
+        numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        denominator = math.sqrt((y2 - y1)**2 + (x2 - x1)**2)
+        return numerator / denominator
+
+    dmax = 0
+    index = 0
+    for i in range(1, len(points) - 1):
+        d = get_distance(points[i], points[0], points[-1])
+        if d > dmax:
+            index = i
+            dmax = d
+
+    if dmax > epsilon:
+        left = simplify_path(points[:index+1], epsilon)
+        right = simplify_path(points[index:], epsilon)
+        return left[:-1] + right
+    else:
+        return [points[0], points[-1]]
 
 def render_transparent_map(
     width: int, 
@@ -15,17 +59,7 @@ def render_transparent_map(
 ) -> Image.Image:
     """
     Renders a map with a transparent background using manual coordinate projection.
-
-    Args:
-        width: Canvas width.
-        height: Canvas height.
-        scale: DPI scale factor.
-        active_layers: Dictionary of layers to render.
-        map_widget: The TkinterMapView instance for projection parameters.
-        show_legend: Whether to include the legend.
-
-    Returns:
-        A PIL Image object.
+    Now includes coordinate decimation for better performance.
     """
     logger.info(f"Rendering transparent map at size {width}x{height} with scale {scale}")
     
@@ -39,11 +73,18 @@ def render_transparent_map(
     ul_x, ul_y = map_widget.upper_left_tile_pos
     zoom = round(map_widget.zoom)
 
+    # Threshold for simplification (0.5 pixels at current scale)
+    epsilon = 0.5 / scale 
+
     # Render paths
     for data in active_layers.values():
+        coords = data['coords']
+        # Decimate coordinates to improve rendering performance
+        if len(coords) > 100:
+            coords = simplify_path(coords, epsilon=0.00005) # ~5 meters tolerance
+            
         points = []
-        for lat, lon in data['coords']:
-            # Manual Lat/Lon -> Pixel conversion
+        for lat, lon in coords:
             tx, ty = decimal_to_osm(lat, lon, zoom)
             px = ((tx - ul_x) / tile_w) * width
             py = ((ty - ul_y) / tile_h) * height
@@ -52,7 +93,6 @@ def render_transparent_map(
         if len(points) > 1:
             draw.line(points, fill=data['color'], width=int(data['width'] * scale), joint="curve")
     
-    # Render legend if requested
     if show_legend and active_layers:
         _draw_legend(draw, active_layers, img_w, img_h, scale)
         

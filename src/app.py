@@ -15,7 +15,7 @@ from typing import List, Dict, Any, Optional
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from processor import GTFSProcessor
-from utils.renderer import render_transparent_map
+from utils.renderer import render_transparent_map, simplify_path, decimal_to_osm
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -162,6 +162,13 @@ class GTFSMapApp(ctk.CTk):
 
         self.map_widget = tkintermapview.TkinterMapView(self.map_container, corner_radius=0, database_path=self.db_path)
         self.map_widget.grid(row=0, column=0, sticky="nsew")
+        
+        # Performance optimization: Increase RAM tile cache size
+        try:
+            self.map_widget.set_tile_cache_max_size(2000)
+        except AttributeError:
+            pass # Use default if not supported
+            
         self.map_widget.set_position(-22.9068, -43.1729)
         self.map_widget.set_zoom(12)
         
@@ -175,42 +182,133 @@ class GTFSMapApp(ctk.CTk):
         self.update_legend()
 
     def load_gtfs(self):
-        """Opens a file dialog to load a GTFS ZIP file."""
+        """Opens a file dialog to load a GTFS ZIP file in a separate thread."""
         file_path = filedialog.askopenfilename(filetypes=[("GTFS ZIP", "*.zip")])
         if file_path:
-            try:
-                self.processor = GTFSProcessor(file_path)
-                self.refresh_route_list()
-                messagebox.showinfo("Sucesso", f"GTFS carregado!\n{len(self.all_routes)} rotas encontradas.")
-            except Exception as e:
-                logger.exception("Failed to load GTFS")
-                messagebox.showerror("Erro", f"Falha ao carregar GTFS: {e}")
+            # Show loading indicator
+            self.load_button.configure(state="disabled", text="⌛ Carregando...")
+            self.root_loading_label = ctk.CTkLabel(self.sidebar, text="Processando dados GTFS...\nIsso pode demorar um pouco.", 
+                                                text_color="#E67E22", font=ctk.CTkFont(size=12, slant="italic"))
+            self.root_loading_label.grid(row=1, column=0, pady=(65, 0))
+            
+            import threading
+            def _thread_load():
+                try:
+                    # Clear old processor if exists
+                    if self.processor is not None:
+                        self.processor.close()
+                        
+                    new_processor = GTFSProcessor(file_path)
+                    
+                    # Update UI in main thread
+                    self.after(0, lambda: self._on_gtfs_loaded(new_processor))
+                except Exception as e:
+                    logger.exception("Failed to load GTFS")
+                    self.after(0, lambda: self._on_gtfs_error(str(e)))
+
+            threading.Thread(target=_thread_load, daemon=True).start()
+
+    def _on_gtfs_loaded(self, processor):
+        """Callback for when GTFS loading is complete."""
+        self.processor = processor
+        self.load_button.configure(state="normal", text="📁 Carregar GTFS (.zip)")
+        if hasattr(self, 'root_loading_label'):
+            self.root_loading_label.destroy()
+            
+        self.refresh_route_list()
+        messagebox.showinfo("Sucesso", f"GTFS carregado!\nLinhas disponíveis para seleção.")
+
+    def _on_gtfs_error(self, error_msg):
+        """Callback for when GTFS loading fails."""
+        self.load_button.configure(state="normal", text="📁 Carregar GTFS (.zip)")
+        if hasattr(self, 'root_loading_label'):
+            self.root_loading_label.destroy()
+        messagebox.showerror("Erro", f"Falha ao carregar GTFS: {error_msg}")
 
     def refresh_route_list(self):
-        """Refreshes the sidebar list of available routes."""
-        for widget in self.route_listbox.winfo_children():
-            widget.destroy()
+        """Refreshes the sidebar list of available routes with virtual scrolling."""
         if not self.processor: return
         self.all_routes = self.processor.get_route_list()
-        self._display_routes(self.all_routes)
+        self.filtered_routes = self.all_routes.copy()
+        
+        # Setup Virtual Scroll parameters
+        self.item_height = 36
+        self.visible_items = 25 # Number of buttons in the pool
+        
+        # Clear existing
+        for widget in self.route_listbox.winfo_children():
+            widget.destroy()
+            
+        # Internal frame to hold buttons, manually managed
+        self.route_canvas = ctk.CTkCanvas(self.route_listbox, bg="#2b2b2b", highlightthickness=0)
+        self.route_canvas.pack(side="left", fill="both", expand=True)
+        
+        self.route_scrollbar = ctk.CTkScrollbar(self.route_listbox, command=self.route_canvas.yview)
+        self.route_scrollbar.pack(side="right", fill="y")
+        self.route_canvas.configure(yscrollcommand=self.route_scrollbar.set)
+        
+        self.virtual_frame = ctk.CTkFrame(self.route_canvas, fg_color="transparent")
+        self.route_canvas.create_window((0, 0), window=self.virtual_frame, anchor="nw", width=360)
+        
+        # Create button pool
+        self.button_pool = []
+        for i in range(self.visible_items):
+            btn = ctk.CTkButton(self.virtual_frame, text="", height=self.item_height-4, anchor="w", fg_color="transparent")
+            btn.place(x=5, y=i * self.item_height, relwidth=0.95)
+            self.button_pool.append(btn)
+            
+        self.route_canvas.bind("<MouseWheel>", self._on_mousewheel)
+        self.route_canvas.bind("<Configure>", self._update_virtual_scroll)
+        
+        self._update_virtual_scroll()
 
-    def _display_routes(self, routes: List[Dict]):
-        """Internal helper to render buttons for each route."""
-        for route in routes:
-            is_active = route['shape_id'] in self.active_layers
-            btn = ctk.CTkButton(self.route_listbox, text=route['display_name'], 
-                               fg_color="#34495E" if is_active else "transparent", 
-                               hover_color="#2C3E50", anchor="w",
-                               command=lambda r=route: self.toggle_route(r))
-            btn.pack(fill="x", padx=5, pady=2, expand=True)
+    def _on_mousewheel(self, event):
+        """Handles mouse wheel scrolling for the virtual list."""
+        self.route_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self._update_virtual_scroll()
+
+    def _update_virtual_scroll(self, event=None):
+        """Updates the button pool based on current scroll position."""
+        if not hasattr(self, 'filtered_routes'): return
+        
+        total_items = len(self.filtered_routes)
+        canvas_height = total_items * self.item_height
+        self.route_canvas.configure(scrollregion=(0, 0, 0, canvas_height))
+        self.virtual_frame.configure(height=canvas_height)
+        
+        # Calculate current range
+        try:
+            scroll_pos = self.route_scrollbar.get()[0]
+        except:
+            scroll_pos = 0
+            
+        start_idx = int(scroll_pos * total_items)
+        start_idx = max(0, min(start_idx, total_items - self.visible_items))
+        
+        for i, btn in enumerate(self.button_pool):
+            route_idx = start_idx + i
+            if route_idx < total_items:
+                route = self.filtered_routes[route_idx]
+                is_active = route['shape_id'] in self.active_layers
+                
+                btn.configure(
+                    text=route['display_name'],
+                    fg_color="#34495E" if is_active else "transparent",
+                    command=lambda r=route: self.toggle_route(r),
+                    state="normal"
+                )
+                btn.place(x=5, y=route_idx * self.item_height, relwidth=0.95)
+            else:
+                btn.configure(text="", state="disabled", fg_color="transparent")
+                btn.place_forget()
 
     def filter_routes(self, event=None):
-        """Filters the route list based on the search entry text."""
+        """Filters the route list and resets virtual scroll."""
         if not self.processor: return
         query = self.search_entry.get().lower()
-        filtered = [r for r in self.all_routes if query in r['display_name'].lower()]
-        for widget in self.route_listbox.winfo_children(): widget.destroy()
-        self._display_routes(filtered)
+        self.filtered_routes = [r for r in self.all_routes if query in r['display_name'].lower()]
+        self.route_canvas.yview_moveto(0)
+        self._update_virtual_scroll()
 
     def toggle_route(self, route: Dict):
         """Add or removes a route from the map."""
@@ -223,8 +321,18 @@ class GTFSMapApp(ctk.CTk):
                 messagebox.showwarning("Aviso", f"Sem coordenadas para {shape_id}")
                 return
             
-            colors = ["#1ABC9C", "#E74C3C", "#3498DB", "#F1C40F", "#9B59B6", "#E67E22", "#2ECC71"]
-            color = colors[len(self.active_layers) % len(colors)]
+            # Application of coordinate decimation here too for the main map widget!
+            if len(coords) > 500:
+                coords = simplify_path(coords, epsilon=0.0001)
+
+            # Automatic Coloring from GTFS
+            gtfs_color = route.get('route_color', '').strip('#').strip()
+            if gtfs_color and len(gtfs_color) == 6:
+                color = f"#{gtfs_color}"
+            else:
+                colors = ["#1ABC9C", "#E74C3C", "#3498DB", "#F1C40F", "#9B59B6", "#E67E22", "#2ECC71"]
+                color = colors[len(self.active_layers) % len(colors)]
+            
             path_obj = self.map_widget.set_path(coords, color=color, width=3)
             
             self.active_layers[shape_id] = {
@@ -242,7 +350,7 @@ class GTFSMapApp(ctk.CTk):
             self.selected_layer_id = shape_id
         
         self.refresh_layer_list()
-        self.filter_routes()
+        self._update_virtual_scroll() # Update pool colors
         self.redraw_all_paths()
         self.update_legend()
 
@@ -406,21 +514,49 @@ class GTFSMapApp(ctk.CTk):
                 ctk.CTkLabel(row, text=text, font=ctk.CTkFont(size=13), text_color="black").pack(side="left", padx=5)
 
     def export_sig(self):
-        """Exports active layers as GeoPackage or Shapefile."""
+        """Exports active layers as GeoPackage, Shapefile, or KML."""
         if not self.active_layers: return
-        file_path = filedialog.asksaveasfilename(defaultextension=".gpkg", filetypes=[("GeoPackage", "*.gpkg"), ("Shapefile", "*.shp")])
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".gpkg", 
+            filetypes=[("GeoPackage", "*.gpkg"), ("Shapefile", "*.shp"), ("KML", "*.kml")]
+        )
         if not file_path: return
+        
         try:
-            features = []
-            for shape_id, data in self.active_layers.items():
-                coords_lonlat = [(c[1], c[0]) for c in data['coords']]
-                features.append({'geometry': LineString(coords_lonlat), 'shape_id': shape_id, 'name': data['display_name'], 'color': data['color']})
-            gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
-            gdf.to_file(file_path, driver="ESRI Shapefile" if file_path.endswith(".shp") else "GPKG")
+            if file_path.lower().endswith(".kml"):
+                self._export_kml(file_path)
+            else:
+                features = []
+                for shape_id, data in self.active_layers.items():
+                    coords_lonlat = [(c[1], c[0]) for c in data['coords']]
+                    features.append({'geometry': LineString(coords_lonlat), 'shape_id': shape_id, 'name': data['display_name'], 'color': data['color']})
+                gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
+                gdf.to_file(file_path, driver="ESRI Shapefile" if file_path.endswith(".shp") else "GPKG")
+            
             messagebox.showinfo("Sucesso", "Exportado com sucesso!")
         except Exception as e: 
             logger.exception("GIS export failed")
             messagebox.showerror("Erro", str(e))
+
+    def _export_kml(self, file_path: str):
+        """Manually generates a KML file for the active layers."""
+        kml_header = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n'
+        kml_footer = '</Document>\n</kml>'
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(kml_header)
+            for shape_id, data in self.active_layers.items():
+                color_hex = data['color'].lstrip('#')
+                # KML uses AABBGGRR format
+                kml_color = f"ff{color_hex[4:6]}{color_hex[2:4]}{color_hex[0:2]}"
+                
+                f.write(f'  <Placemark>\n    <name>{data["display_name"]}</name>\n')
+                f.write(f'    <Style><LineStyle><color>{kml_color}</color><width>{data["width"]}</width></LineStyle></Style>\n')
+                f.write('    <LineString>\n      <coordinates>\n        ')
+                coords_str = " ".join([f"{c[1]},{c[0]},0" for c in data['coords']])
+                f.write(coords_str)
+                f.write('\n      </coordinates>\n    </LineString>\n  </Placemark>\n')
+            f.write(kml_footer)
 
     def change_basemap(self, choice: str):
         """Changes the tile server based on user choice."""
@@ -439,15 +575,20 @@ class GTFSMapApp(ctk.CTk):
             self.map_widget.canvas.configure(bg="#00FF01") # Green screen-ish for transparency
 
     def save_map(self):
-        """Saves the current map as an image (PNG/PDF)."""
-        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png"), ("PDF", "*.pdf")])
+        """Saves the current map as an image (PNG/PDF/SVG)."""
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".png", 
+            filetypes=[("PNG", "*.png"), ("PDF", "*.pdf"), ("SVG", "*.svg")]
+        )
         if not file_path: return
         try:
             try: dpi = int(self.dpi_entry.get())
-            except: dpi = 150
+            except: dpi = 300
             scale = dpi / 96.0
 
-            if self.basemap_menu.get() == "Transparent" and file_path.lower().endswith(".png"):
+            if file_path.lower().endswith(".svg"):
+                self._export_svg(file_path, scale)
+            elif self.basemap_menu.get() == "Transparent" and file_path.lower().endswith(".png"):
                 # Use decoupled rendering logic for high-quality transparent export
                 image = render_transparent_map(
                     self.map_container.winfo_width(),
@@ -457,6 +598,7 @@ class GTFSMapApp(ctk.CTk):
                     self.map_widget,
                     self.legend_switch.get()
                 )
+                image.save(file_path, dpi=(dpi, dpi))
             else:
                 # Standard screen capture
                 self.map_widget.canvas.itemconfig("button", state='hidden')
@@ -464,19 +606,53 @@ class GTFSMapApp(ctk.CTk):
                 time.sleep(0.5)
                 x, y, w, h = self.map_container.winfo_rootx(), self.map_container.winfo_rooty(), self.map_container.winfo_width(), self.map_container.winfo_height()
                 image = ImageGrab.grab(bbox=(x, y, x + w, y + h), all_screens=True)
-                if scale > 1.1: image = image.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
-                self.map_widget.canvas.itemconfig("button", state='normal')
-
-            if file_path.endswith(".pdf"): 
-                image.convert("RGB").save(file_path, resolution=float(dpi))
-            else: 
-                image.save(file_path, dpi=(dpi, dpi))
+                if scale > 1.1: 
+                    image = image.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+                
+                if file_path.endswith(".pdf"): 
+                    image.convert("RGB").save(file_path, resolution=float(dpi))
+                else: 
+                    image.save(file_path, dpi=(dpi, dpi))
+            
             messagebox.showinfo("Sucesso", "Mapa salvo com sucesso!")
         except Exception as e: 
             logger.exception("Save map failed")
             messagebox.showerror("Erro", str(e))
         finally:
             self.map_widget.canvas.itemconfig("button", state='normal')
+
+    def _export_svg(self, file_path: str, scale: float):
+        """Exports the active layers as a vector SVG file."""
+        
+        width = self.map_container.winfo_width()
+        height = self.map_container.winfo_height()
+        
+        svg_header = f'<?xml version="1.0" encoding="UTF-8"?>\n<svg width="{width*scale}" height="{height*scale}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">\n'
+        svg_footer = '</svg>'
+        
+        tile_w = self.map_widget.lower_right_tile_pos[0] - self.map_widget.upper_left_tile_pos[0]
+        tile_h = self.map_widget.lower_right_tile_pos[1] - self.map_widget.upper_left_tile_pos[1]
+        ul_x, ul_y = self.map_widget.upper_left_tile_pos
+        zoom = round(self.map_widget.zoom)
+
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(svg_header)
+            # Add transparent indicator if needed
+            if self.basemap_menu.get() != "Transparent":
+                f.write(f'  <rect width="100%" height="100%" fill="white" />\n')
+            
+            for shape_id, data in self.active_layers.items():
+                points = []
+                for lat, lon in data['coords']:
+                    tx, ty = decimal_to_osm(lat, lon, zoom)
+                    px = ((tx - ul_x) / tile_w) * width
+                    py = ((ty - ul_y) / tile_h) * height
+                    points.append(f"{px},{py}")
+                
+                path_data = "L".join(points)
+                if path_data:
+                    f.write(f'  <path d="M{path_data}" fill="none" stroke="{data["color"]}" stroke-width="{data["width"]}" stroke-linejoin="round" />\n')
+            f.write(svg_footer)
 
     def _maximize_window(self):
         """Helper to maximize window state on Windows."""

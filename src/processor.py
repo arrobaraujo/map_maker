@@ -2,6 +2,9 @@ import pandas as pd
 import zipfile
 import os
 import logging
+import sqlite3
+import tempfile
+import atexit
 from typing import List, Dict, Tuple, Optional
 
 # Configure logging
@@ -11,6 +14,7 @@ logger = logging.getLogger(__name__)
 class GTFSProcessor:
     """
     Handles loading and processing of GTFS data from a ZIP file.
+    Uses SQLite for efficient geometric data storage.
     """
     def __init__(self, zip_path: str):
         """
@@ -22,13 +26,38 @@ class GTFSProcessor:
         self.zip_path = zip_path
         self.routes = pd.DataFrame()
         self.trips = pd.DataFrame()
-        self.shapes = pd.DataFrame()
-        self.coords_cache: Dict[str, List[Tuple[float, float]]] = {}
+        
+        # Setup temporary SQLite database for shapes to save RAM
+        self.temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+        self.db_path = self.temp_db.name
+        self.temp_db.close()
+        
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        self._setup_db()
+        
+        atexit.register(lambda: self.close())
+        
         self.load_data()
+
+    def _setup_db(self):
+        """Creates the necessary tables and indexes in the temporary SQLite DB."""
+        self.cursor.execute("DROP TABLE IF EXISTS shapes")
+        self.cursor.execute("""
+            CREATE TABLE shapes (
+                shape_id TEXT,
+                lat REAL,
+                lon REAL,
+                sequence INTEGER
+            )
+        """)
+        self.cursor.execute("CREATE INDEX idx_shape_id ON shapes (shape_id)")
+        self.conn.commit()
 
     def load_data(self) -> None:
         """
         Loads essential GTFS files (routes.txt, trips.txt, shapes.txt) from the ZIP.
+        Simplified to only load metadata to RAM and points to SQLite.
         """
         if not os.path.exists(self.zip_path):
             logger.error(f"GTFS file not found: {self.zip_path}")
@@ -38,29 +67,44 @@ class GTFSProcessor:
             with zipfile.ZipFile(self.zip_path, 'r') as z:
                 file_list = z.namelist()
                 
-                # Load routes
+                # Load routes - Include colors
                 if 'routes.txt' in file_list:
                     with z.open('routes.txt') as f:
-                        self.routes = pd.read_csv(f, dtype={'route_id': str, 'route_short_name': str, 'route_long_name': str}, 
+                        available_cols = pd.read_csv(z.open('routes.txt'), nrows=0).columns
+                        use_cols = [c for c in ['route_id', 'route_short_name', 'route_long_name', 'route_color', 'route_text_color'] if c in available_cols]
+                        self.routes = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'route_short_name': str}, 
                                                 encoding='utf-8-sig', on_bad_lines='skip')
                     logger.info(f"Loaded {len(self.routes)} routes.")
                 
-                # Load trips
+                # Load trips - Only essential columns
                 if 'trips.txt' in file_list:
                     with z.open('trips.txt') as f:
-                        self.trips = pd.read_csv(f, dtype={'route_id': str, 'trip_id': str, 'shape_id': str, 'trip_headsign': str, 'direction_id': str}, 
+                        available_cols = pd.read_csv(z.open('trips.txt'), nrows=0).columns
+                        use_cols = [c for c in ['route_id', 'trip_id', 'shape_id', 'trip_headsign', 'direction_id'] if c in available_cols]
+                        self.trips = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'shape_id': str}, 
                                                encoding='utf-8-sig', on_bad_lines='skip')
                     logger.info(f"Loaded {len(self.trips)} trips.")
                 
-                # Load shapes
+                # Load shapes -> DIRECT TO SQLITE
                 if 'shapes.txt' in file_list:
+                    logger.info("Processing shapes into SQLite (this may take a moment for large files)...")
                     with z.open('shapes.txt') as f:
-                        self.shapes = pd.read_csv(f, dtype={'shape_id': str}, 
-                                                encoding='utf-8-sig', on_bad_lines='skip')
-                        if not self.shapes.empty:
-                            self.shapes['shape_pt_sequence'] = pd.to_numeric(self.shapes['shape_pt_sequence'], errors='coerce').fillna(0).astype(int)
-                            self.shapes.sort_values(['shape_id', 'shape_pt_sequence'], inplace=True)
-                    logger.info(f"Loaded {len(self.shapes)} shape points.")
+                        # Process in chunks to keep memory low
+                        chunk_iter = pd.read_csv(f, chunksize=100000, dtype={'shape_id': str}, encoding='utf-8-sig')
+                        for chunk in chunk_iter:
+                            # Map essential columns
+                            available_cols = chunk.columns
+                            mapping = {
+                                'shape_id': 'shape_id',
+                                'shape_pt_lat': 'lat',
+                                'shape_pt_lon': 'lon',
+                                'shape_pt_sequence': 'sequence'
+                            }
+                            data_to_insert = chunk[[c for c in mapping.keys() if c in available_cols]].rename(columns=mapping)
+                            data_to_insert.to_sql('shapes', self.conn, if_exists='append', index=False)
+                    
+                    self.conn.commit()
+                    logger.info("Shapes indexed in SQLite.")
         except Exception as e:
             logger.error(f"Error loading GTFS data: {e}")
             raise
@@ -73,26 +117,17 @@ class GTFSProcessor:
             A list of dictionaries, each representing a route.
         """
         if self.routes.empty or self.trips.empty:
-            logger.warning("Routes or trips data is empty.")
             return []
         
-        # Merge trips with routes to find associated shape_ids
-        # We drop duplicates to get unique shape_id/route_id combinations
         trips_info = self.trips[['route_id', 'shape_id', 'trip_headsign', 'direction_id']].drop_duplicates(subset=['shape_id'])
         merged = self.routes.merge(trips_info, on='route_id', how='inner')
         
         route_list = []
         for _, row in merged.iterrows():
-            short_name = str(row['route_short_name'])
+            short_name = str(row.get('route_short_name', ''))
             headsign = str(row.get('trip_headsign', ''))
             direction = str(row.get('direction_id', ''))
-            
-            # Map direction_id to descriptive label
-            dir_label = ""
-            if direction == '0':
-                dir_label = "(Ida)"
-            elif direction == '1':
-                dir_label = "(Volta)"
+            dir_label = "(Ida)" if direction == '0' else ("(Volta)" if direction == '1' else "")
             
             clean_headsign = headsign if headsign and headsign.lower() != 'nan' else ""
             display_name = f"{short_name} - {clean_headsign} {dir_label}".strip(' - ')
@@ -104,32 +139,27 @@ class GTFSProcessor:
                 'short_name': short_name,
                 'long_name': str(row.get('route_long_name', '')),
                 'direction': dir_label,
-                'trip_headsign': headsign
+                'trip_headsign': headsign,
+                'route_color': str(row.get('route_color', '')),
+                'route_text_color': str(row.get('route_text_color', ''))
             })
         
         return sorted(route_list, key=lambda x: x['display_name'])
 
     def get_shape_coordinates(self, shape_id: str) -> List[Tuple[float, float]]:
         """
-        Gets the latitude and longitude coordinates for a given shape_id.
-
-        Args:
-            shape_id: The ID of the shape to retrieve.
-
-        Returns:
-            A list of (latitude, longitude) tuples.
+        Gets the latitude and longitude coordinates for a given shape_id from SQLite.
         """
-        if shape_id in self.coords_cache:
-            return self.coords_cache[shape_id]
-            
-        if self.shapes.empty:
-            return []
-        
-        shape_data = self.shapes[self.shapes['shape_id'] == shape_id]
-        if shape_data.empty:
-            logger.warning(f"No coordinates found for shape_id: {shape_id}")
-            return []
-        
-        coords = list(zip(shape_data['shape_pt_lat'], shape_data['shape_pt_lon']))
-        self.coords_cache[shape_id] = coords
-        return coords
+        self.cursor.execute("SELECT lat, lon FROM shapes WHERE shape_id = ? ORDER BY sequence", (shape_id,))
+        return self.cursor.fetchall()
+
+    def close(self):
+        """Closes the DB connection and removes the temporary file."""
+        try:
+            if hasattr(self, 'conn'):
+                self.conn.close()
+            if hasattr(self, 'db_path') and os.path.exists(self.db_path):
+                os.remove(self.db_path)
+                logger.info("Temporary shapes database removed.")
+        except Exception as e:
+            logger.error(f"Error closing GTFSProcessor: {e}")

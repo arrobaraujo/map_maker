@@ -9,22 +9,24 @@ GTFS route map generator with a modern graphical interface and GIS support.
 If you just want to run the app without installing Python:
 1. Go to the [**Releases**](https://github.com/arrobaraujo/map_maker/releases) tab of this repository.
 2. Download the latest `.exe` file at the bottom of the page in the "Assets" section.
-3. Run the file directly!
+3. Run the file directly! (If Windows blocks it, see [this guide](DISTRIBUTION_EN.md)).
 
 ## ✨ Features
 - Robust GTFS (.zip) file reading with encoding error handling.
-- Specific route selection with **Geometry Caching** (instant loading).
+- Specific route selection with **Geometry Caching** (instant loading), **Asynchronous Loading**, and **List Virtualization** to support thousands of routes.
+- **Smart Drawing:** *Douglas-Peucker* algorithm for path simplification (decimation), ensuring fluidity and low memory usage.
 - **Map Tile Cache:** Local storage of visited map tiles.
 - **High-Fidelity Transparent Export:** "Transparent" map option that generates PNGs with an invisible (Alpha) background via **direct digital rendering**. This ensures 100% solid colors without edge fading and **eliminates system watermarks (like "Activate Windows")**.
 - **Legend Control:** Enable or disable the legend. In transparent mode, it is also digitally rendered.
-- Line color and thickness customization.
+- **Official GTFS Colors:** Automatic application of the agency's original colors (`route_color`).
+- Manual line color and thickness customization.
 - Layer order (z-index) control.
 - Different high-performance background maps (Basemaps).
 - **Smart Legend:** Automatic unification by color to simplify visualization.
 - Individual Layer Removal via button (✕).
 - Clean screenshots (automatically hides zoom buttons).
 - **High-Quality Export:** DPI control for sharp images and PDFs.
-- **Geographic Export (GIS):** Save selected routes in professional formats: **GeoPackage (.gpkg)** and **Shapefile (.shp)**.
+- **Professional Export:** Save selected routes in **SVG (Vector)**, **KML (Google Earth)**, **GeoPackage (.gpkg)**, and **Shapefile (.shp)** formats.
 
 ## Dependencies
 - Python 3.9+
