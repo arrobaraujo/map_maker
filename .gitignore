@@ -33,3 +33,8 @@ ENV/
 gtfs_data/
 temp/
 map_tiles_cache/
+
+# Distribution
+dist/
+build/
+*.spec

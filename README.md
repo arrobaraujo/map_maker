@@ -2,7 +2,14 @@
 
 Gerador de mapas de itinerários GTFS com interface gráfica moderna e suporte a SIG.
 
-## Funcionalidades
+## 📥 Download (Versão Pronta)
+
+Se você quer apenas rodar o aplicativo sem precisar instalar o Python:
+1. Acesse a aba [**Releases**](https://github.com/arrobaraujo/map_maker/releases) deste repositório.
+2. Baixe o arquivo `.exe` mais recente.
+3. Execute o arquivo diretamente!
+
+## ✨ Funcionalidades
 - Leitura de arquivos GTFS (.zip) com robustez a erros de codificação.
 - Seleção de rotas específicas com sistema de **Cache de Geometrias** (carregamento instantâneo).
 - **Cache de Mapa (Tiles):** Armazenamento local de blocos de mapa visitados.
@@ -21,11 +28,7 @@ Gerador de mapas de itinerários GTFS com interface gráfica moderna e suporte a
 - Python 3.9+
 - CustomTkinter
 - TkinterMapView
-## GTFS Map Maker 🌐🚌
-
-Ferramenta visual para gerar mapas de itinerários a partir de arquivos GTFS.
-
-## 🚀 Como Executar
+## 🚀 Como Executar (Código Fonte)
 
 1. Certifique-se de ter o Python 3.10+ instalado.
 2. Instale as dependências:
@@ -37,27 +40,25 @@ Ferramenta visual para gerar mapas de itinerários a partir de arquivos GTFS.
    python src/app.py
    ```
 
+## 📦 Como Gerar o Executável (.exe)
+
+Para criar um arquivo único `.exe` para Windows:
+
+1. Instale o PyInstaller:
+   ```bash
+   pip install pyinstaller
+   ```
+2. Gere o executável com o comando (ajuste o caminho da `.venv` se necessário):
+   ```bash
+   pyinstaller --noconsole --onefile --add-data ".venv/Lib/site-packages/customtkinter;customtkinter/" src/app.py
+   ```
+3. O arquivo final estará na pasta `dist/`.
+
 ## 📂 Estrutura do Projeto
 
-- `src/`: Código fonte da aplicação.
-  - `app.py`: Interface principal e controle.
-  - `processor.py`: Lógica de processamento de dados GTFS.
-  - `utils/`: Utilitários e renderizadores.
-- `tests/`: Testes automatizados.
-- `map_tiles_cache/`: Cache local de mapas para uso offline.
-
-## 🧪 Testes
-
-Para rodar os testes unitários:
-```bash
-pytest tests/
-```
-
-## ✨ Funcionalidades
-
-- Carregamento de GTFS (.zip)
-- Visualização interativa com múltiplos provedores de mapas (Google, OSM, Esri, Carto).
-- Customização de cores e espessura das linhas.
-- Exportação para PNG transparente (Alta Qualidade/DPI).
-- Exportação para SIG (GeoPackage e Shapefile).
-- Sistema de cache de mapas para performance e uso offline.
+- `src/`: Código fonte.
+  - `app.py`: Interface principal (GUI).
+  - `processor.py`: Lógica GTFS.
+  - `utils/renderer.py`: Renderização de mapas.
+- `tests/`: Testes automatizados (`pytest`).
+- `map_tiles_cache/`: Cache de mapas offline.
