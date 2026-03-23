@@ -12,16 +12,9 @@ Se você quer apenas rodar o aplicativo sem precisar instalar o Python:
 3. Execute o arquivo diretamente! (Se o Windows bloquear, veja [este guia](DISTRIBUTION_PT.md)).
 
 ## ✨ Funcionalidades
-- Leitura de arquivos GTFS (.zip) com robustez a erros de codificação.
-- Seleção de rotas específicas com sistema de **Cache de Geometrias** (carregamento instantâneo), **Carregamento Assíncrono** e **Virtualização de Lista** para suportar milhares de rotas.
-- **Desenho Inteligente:** Algoritmo de *Douglas-Peucker* para simplificar rotas complexas (decimação), garantindo fluidez e baixo consumo de memória.
-- **Cache de Mapa (Tiles):** Armazenamento local de blocos de mapa visitados.
-- **Exportação Transparente de Alta Fidelidade:** Opção de mapa "Transparent" que gera PNGs com fundo invisível (Alpha) via **renderização digital direta**. Isso garante cores 100% sólidas sem efeito de fade nas bordas e **elimina marcas d'água do sistema (como "Ativar Windows")**.
-- **Controle de Legenda:** Habilite ou desabilite a legenda. No modo transparente, ela também é renderizada digitalmente.
-- **Cores Oficiais do GTFS:** Aplicação automática das cores originais da agência (`route_color`).
-- Customização manual de cor e espessura das linhas.
-- Controle de ordem de camadas (z-index).
-- Diferentes opções de mapas de fundo (Basemaps) de alta performance.
+- **Zoom Granular (0.1)**: Ajuste de zoom preciso para enquadramentos perfeitos, com suavidade e sem saltos bruscos.
+- **Seleção Múltipla Inteligente**: Selecione várias camadas com **Ctrl + Clique** ou uma linha completa (todas as direções) com **Shift + Clique**.
+- **Estilização em Lote**: Altere cor e espessura de múltiplas camadas selecionadas simultaneamente.
 - **Legenda Inteligente:** Unificação automática por cor para simplificar a visualização.
 - Remoção Individual de Camadas com botão (✕).
 - Capturas de tela limpas (oculta botões de zoom automaticamente).

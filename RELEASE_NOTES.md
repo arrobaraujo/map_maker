@@ -1,3 +1,25 @@
+# Release Notes - v1.2.0 🎯
+
+Esta versão traz o **Zoom Fracionário Estabilizado** e melhorias significativas na **Interface de Camadas**.
+
+## O que há de novo?
+
+### 🗺️ Mapa e Navegação (Foco em Precisão)
+- **Zoom Granular (0.1)**: Agora você pode ajustar o zoom em passos de 0.1 (ex: 14.5). O mapa não "pula" mais apenas nos inteiros, permitindo o enquadramento perfeito.
+- **Correção de Alinhamento**: Resolvemos o problema de tiles desalinhados ou "misturados" durante o zoom fracionário. Marcadores e rotas permanecem perfeitamente posicionados.
+- **Performance de Renderização**: Implementamos um sistema de cache de redimensionamento de tiles. O mapa agora é muito mais fluido ao navegar e aproximar.
+
+### 🍱 Gestão de Camadas (Sidebar)
+- **Seleção Múltipla**: Agora é possível selecionar várias camadas simultaneamente na lista lateral.
+    - **Ctrl + Clique**: Seleciona/deseleciona camadas individuais.
+    - **Shift + Clique**: Seleciona automaticamente **todas as direções da mesma linha** (ex: Ida e Volta).
+- **Estilização em Lote**: Altere a cor ou a espessura de todas as camadas selecionadas de uma só vez, economizando tempo no design do mapa.
+
+### 🧹 Limpeza e Estabilidade
+- **Console Limpo**: Removemos todos os logs de diagnóstico redundantes (`DEBUG LIB`, `DEBUG UTIL`), deixando o terminal livre de poluição visual.
+
+---
+
 # Release Notes - v1.1.0 🚀
 
 Esta versão foca em **estilização automática**, **interoperabilidade** e **performance extrema**.

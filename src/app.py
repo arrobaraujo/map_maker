@@ -10,6 +10,7 @@ from PIL import Image, ImageGrab
 import geopandas as gpd
 from shapely.geometry import LineString
 from typing import List, Dict, Any, Optional
+from functools import partial
 
 # Add the src/ directory to the path to ensure imports work correctly
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -46,7 +47,7 @@ class GTFSMapApp(ctk.CTk):
         self.processor: Optional[GTFSProcessor] = None
         self.all_routes: List[Dict] = []
         self.active_layers: Dict[str, Dict[str, Any]] = {}
-        self.selected_layer_id: Optional[str] = None
+        self.selected_layer_ids: set[str] = set()
 
         # Configuration
         ctk.set_appearance_mode("Dark")
@@ -127,15 +128,15 @@ class GTFSMapApp(ctk.CTk):
         ctk.CTkButton(self.controls_frame, text="📍 Focar", width=70, command=self.fit_map_buffer).grid(row=0, column=3, padx=5, pady=15)
 
         # Zoom Controls (Buttons + Entry)
-        self.zoom_minus_btn = ctk.CTkButton(self.controls_frame, text="-", width=30, command=lambda: self.adjust_zoom(-1.0))
+        self.zoom_minus_btn = ctk.CTkButton(self.controls_frame, text="-", width=30, command=lambda: self.adjust_zoom(-0.1))
         self.zoom_minus_btn.grid(row=0, column=4, padx=(5, 2), pady=15)
         
         self.zoom_entry = ctk.CTkEntry(self.controls_frame, width=50)
-        self.zoom_entry.insert(0, "12")
+        self.zoom_entry.insert(0, "12.0")
         self.zoom_entry.grid(row=0, column=5, padx=2, pady=15)
         self.zoom_entry.bind("<Return>", lambda e: self.update_zoom_from_entry())
         
-        self.zoom_plus_btn = ctk.CTkButton(self.controls_frame, text="+", width=30, command=lambda: self.adjust_zoom(1.0))
+        self.zoom_plus_btn = ctk.CTkButton(self.controls_frame, text="+", width=30, command=lambda: self.adjust_zoom(0.1))
         self.zoom_plus_btn.grid(row=0, column=6, padx=(2, 5), pady=15)
 
         self.basemap_menu = ctk.CTkOptionMenu(self.controls_frame, values=["Carto Light", "Carto Dark", "Esri Light", "Esri Dark", "OpenStreetMap", "Google Normal", "Transparent"], width=130, command=self.change_basemap)
@@ -198,7 +199,8 @@ class GTFSMapApp(ctk.CTk):
                 try:
                     # Clear old processor if exists
                     if self.processor is not None:
-                        self.processor.close()
+                        if hasattr(self, 'processor') and self.processor is not None:
+                            self.processor.close()
                         
                     new_processor = GTFSProcessor(file_path)
                     
@@ -359,7 +361,7 @@ class GTFSMapApp(ctk.CTk):
                 'width': 3,
                 'coords': coords
             }
-            self.selected_layer_id = shape_id
+            self.selected_layer_ids = {shape_id}
         
         self.refresh_layer_list()
         self._update_virtual_scroll() # Update pool colors
@@ -371,9 +373,8 @@ class GTFSMapApp(ctk.CTk):
         if shape_id in self.active_layers:
             if self.active_layers[shape_id].get('path_obj'):
                 self.active_layers[shape_id]['path_obj'].delete()
-            self.active_layers.pop(shape_id, None)
-            if self.selected_layer_id == shape_id:
-                self.selected_layer_id = None
+            if shape_id in self.selected_layer_ids:
+                self.selected_layer_ids.remove(shape_id)
             self.refresh_layer_list()
             self.filter_routes()
             self.redraw_all_paths()
@@ -384,7 +385,7 @@ class GTFSMapApp(ctk.CTk):
         for data in self.active_layers.values():
             if data.get('path_obj'): data['path_obj'].delete()
         self.active_layers = {}
-        self.selected_layer_id = None
+        self.selected_layer_ids.clear()
         self.refresh_layer_list()
         self.filter_routes()
         self.update_legend()
@@ -403,68 +404,108 @@ class GTFSMapApp(ctk.CTk):
 
     def adjust_zoom(self, delta):
         """Increments or decrements the zoom by delta."""
-        current_zoom = round(float(self.map_widget.zoom))
-        new_zoom = int(max(1, min(19, current_zoom + delta)))
-        self.map_widget.set_zoom(new_zoom)
+        current_zoom = float(self.map_widget.zoom)
+        new_zoom = max(1.0, min(19.0, current_zoom + delta))
+        new_zoom = max(1.0, min(19.0, current_zoom + delta))
+        self.map_widget.set_zoom(round(new_zoom, 1))
         self.after(200, self.sync_zoom_from_map)
 
     def update_zoom_from_entry(self):
         """Updates the map zoom based on the entry field value."""
         try:
             val = float(self.zoom_entry.get().replace(',', '.'))
-            new_zoom = int(round(max(1, min(19, val))))
-            self.map_widget.set_zoom(new_zoom)
+            new_zoom = max(1.0, min(19.0, val))
+            self.map_widget.set_zoom(float(round(new_zoom, 1)))
             self.after(200, self.sync_zoom_from_map)
         except ValueError:
             self.sync_zoom_from_map()
 
     def sync_zoom_from_map(self):
         """Synchronizes the entry field with the current map zoom level."""
-        current_zoom = int(round(float(self.map_widget.zoom)))
+        current_zoom = float(self.map_widget.zoom)
         self.zoom_entry.delete(0, "end")
-        self.zoom_entry.insert(0, str(current_zoom))
+        self.zoom_entry.insert(0, f"{current_zoom:.1f}")
     def refresh_layer_list(self):
         """Updates the active layers list in the sidebar."""
         for widget in self.layer_listbox.winfo_children(): widget.destroy()
         for shape_id, data in self.active_layers.items():
-            is_sel = self.selected_layer_id == shape_id
+            is_sel = shape_id in self.selected_layer_ids
             row = ctk.CTkFrame(self.layer_listbox, fg_color="transparent")
             row.pack(fill="x", padx=2, pady=2)
+            
             btn = ctk.CTkButton(row, text=data['display_name'],
                                fg_color="#2980B9" if is_sel else "transparent",
-                               command=lambda s=shape_id: self.select_layer(s))
+                               command=None) # We'll bind the event manually
             btn.pack(side="left", fill="x", expand=True, padx=(0, 2))
+            btn.bind("<Button-1>", lambda e, s=shape_id: self.select_layer(s, e))
+            
             ctk.CTkButton(row, text="✕", width=30, height=32, command=lambda s=shape_id: self._remove_layer(s)).pack(side="right")
 
-    def select_layer(self, shape_id: str):
-        """Sets a layer as the currently selected one for styling."""
-        self.selected_layer_id = shape_id
-        data = self.active_layers[shape_id]
-        self.width_slider.set(data['width'])
-        self.width_label.configure(text=f"Espessura: {int(data['width'])}")
+    def select_layer(self, shape_id: str, event=None):
+        """Sets a layer as the currently selected one for styling. 
+        - Click: Select one
+        - Ctrl + Click: Toggle selection
+        - Shift + Click: Select all trips of the same line
+        """
+        if shape_id not in self.active_layers: return
+
+        # Detect modifiers
+        is_ctrl = False
+        is_shift = False
+        if event:
+            is_ctrl = (event.state & 0x0004) or (sys.platform == "darwin" and event.state & 0x0008)
+            is_shift = (event.state & 0x0001)
+
+        if is_shift:
+            # Select all layers with same short_name
+            target_sn = self.active_layers[shape_id]['short_name']
+            for sid, data in self.active_layers.items():
+                if data['short_name'] == target_sn:
+                    self.selected_layer_ids.add(sid)
+        elif is_ctrl:
+            if shape_id in self.selected_layer_ids:
+                self.selected_layer_ids.remove(shape_id)
+            else:
+                self.selected_layer_ids.add(shape_id)
+        else:
+            # Single select
+            self.selected_layer_ids = {shape_id}
+
+        # Update UI sliders with the first selected layer's values
+        if self.selected_layer_ids:
+            first_id = list(self.selected_layer_ids)[0]
+            data = self.active_layers[first_id]
+            self.width_slider.set(data['width'])
+            self.width_label.configure(text=f"Espessura: {int(data['width'])}")
+        
         self.refresh_layer_list()
 
     def choose_color(self):
-        """Opens a color chooser for the selected layer."""
-        if not self.selected_layer_id: return
+        """Opens a color chooser for the selected layers."""
+        if not self.selected_layer_ids: return
         color = colorchooser.askcolor(title="Escolha a cor da linha")[1]
         if color:
-            self.active_layers[self.selected_layer_id]['color'] = color
+            for sid in self.selected_layer_ids:
+                if sid in self.active_layers:
+                    self.active_layers[sid]['color'] = color
             self.redraw_all_paths()
             self.update_legend()
 
     def update_style(self, value):
-        """Updates the line width for the selected layer."""
-        if not self.selected_layer_id: return
-        self.active_layers[self.selected_layer_id]['width'] = int(value)
+        """Updates the line width for the selected layers."""
+        if not self.selected_layer_ids: return
+        for sid in self.selected_layer_ids:
+            if sid in self.active_layers:
+                self.active_layers[sid]['width'] = int(value)
         self.width_label.configure(text=f"Espessura: {int(value)}")
         self.redraw_all_paths()
 
     def move_layer(self, direction: int):
         """Changes the rendering order of layers."""
-        if not self.selected_layer_id: return
+        if not self.selected_layer_ids or len(self.selected_layer_ids) > 1: return
+        sid = list(self.selected_layer_ids)[0]
         keys = list(self.active_layers.keys())
-        idx = keys.index(self.selected_layer_id)
+        idx = keys.index(sid)
         new_idx = idx + direction
         if 0 <= new_idx < len(keys):
             keys[idx], keys[new_idx] = keys[new_idx], keys[idx]
