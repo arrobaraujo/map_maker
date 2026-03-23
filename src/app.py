@@ -86,8 +86,10 @@ class GTFSMapApp(ctk.CTk):
         self.search_entry.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
         self.search_entry.bind("<KeyRelease>", self.filter_routes)
 
-        self.route_listbox = ctk.CTkScrollableFrame(self.sidebar, label_text="Linhas Disponíveis")
-        self.route_listbox.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.route_listbox = ctk.CTkFrame(self.sidebar)
+        self.route_listbox.grid(row=3, column=0, padx=20, pady=(10, 0), sticky="nsew")
+        
+        ctk.CTkLabel(self.route_listbox, text="Linhas Disponíveis", font=ctk.CTkFont(size=13, weight="bold")).pack(pady=(5, 0))
 
         # --- Active Layers Area ---
         self.layer_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
@@ -231,62 +233,74 @@ class GTFSMapApp(ctk.CTk):
         self.all_routes = self.processor.get_route_list()
         self.filtered_routes = self.all_routes.copy()
         
-        # Setup Virtual Scroll parameters
-        self.item_height = 36
-        self.visible_items = 25 # Number of buttons in the pool
-        
         # Clear existing
         for widget in self.route_listbox.winfo_children():
             widget.destroy()
+
+        ctk.CTkLabel(self.route_listbox, text="Linhas Disponíveis", 
+                     font=ctk.CTkFont(size=13, weight="bold")).pack(pady=(5, 5))
             
-        # Internal frame to hold buttons, manually managed
-        self.route_canvas = ctk.CTkCanvas(self.route_listbox, bg="#2b2b2b", highlightthickness=0)
-        self.route_canvas.pack(side="left", fill="both", expand=True)
+        # UI Layout: [ Virtual Frame (Buttons) | Scrollbar ]
+        self.virtual_frame = ctk.CTkFrame(self.route_listbox, fg_color="transparent")
+        self.virtual_frame.pack(side="left", fill="both", expand=True)
         
-        self.route_scrollbar = ctk.CTkScrollbar(self.route_listbox, command=self.route_canvas.yview)
+        self.route_scrollbar = ctk.CTkScrollbar(self.route_listbox, command=self._on_scrollbar_move)
         self.route_scrollbar.pack(side="right", fill="y")
-        self.route_canvas.configure(yscrollcommand=self.route_scrollbar.set)
         
-        self.virtual_frame = ctk.CTkFrame(self.route_canvas, fg_color="transparent")
-        self.route_canvas.create_window((0, 0), window=self.virtual_frame, anchor="nw", width=360)
+        # Setup Virtual Scroll parameters
+        self.item_height = 36
+        self.scroll_offset = 0
+        
+        # Calculate visible items based on frame height
+        self.update() # Force layout to get height
+        available_height = self.route_listbox.winfo_height() - 40 # Subtract label space
+        self.visible_items = max(5, (available_height // self.item_height) + 1)
         
         # Create button pool
         self.button_pool = []
         for i in range(self.visible_items):
             btn = ctk.CTkButton(self.virtual_frame, text="", height=self.item_height-4, anchor="w", fg_color="transparent")
-            btn.place(x=5, y=i * self.item_height, relwidth=0.95)
+            btn.pack(fill="x", padx=5, pady=2)
+            btn.bind("<MouseWheel>", self._on_mousewheel)
             self.button_pool.append(btn)
             
-        self.route_canvas.bind("<MouseWheel>", self._on_mousewheel)
-        self.route_canvas.bind("<Configure>", self._update_virtual_scroll)
-        
+        self.virtual_frame.bind("<MouseWheel>", self._on_mousewheel)
+        self._update_virtual_scroll()
+
+    def _on_scrollbar_move(self, action, value, unit=None):
+        """Manually handles scrollbar actions to update the virtual list."""
+        total_items = len(self.filtered_routes)
+        if action == "moveto":
+            self.scroll_offset = int(float(value) * total_items)
+        elif action == "scroll":
+            delta = int(value)
+            self.scroll_offset += delta
+            
         self._update_virtual_scroll()
 
     def _on_mousewheel(self, event):
-        """Handles mouse wheel scrolling for the virtual list."""
-        self.route_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        """Handles mouse wheel by shifting the scroll offset."""
+        delta = -1 if event.delta > 0 else 1
+        self.scroll_offset += delta
         self._update_virtual_scroll()
 
     def _update_virtual_scroll(self, event=None):
-        """Updates the button pool based on current scroll position."""
+        """Refreshes button content based on self.scroll_offset."""
         if not hasattr(self, 'filtered_routes'): return
         
         total_items = len(self.filtered_routes)
-        canvas_height = total_items * self.item_height
-        self.route_canvas.configure(scrollregion=(0, 0, 0, canvas_height))
-        self.virtual_frame.configure(height=canvas_height)
+        # Constrain offset
+        max_offset = max(0, total_items - self.visible_items)
+        self.scroll_offset = max(0, min(self.scroll_offset, max_offset))
         
-        # Calculate current range
-        try:
-            scroll_pos = self.route_scrollbar.get()[0]
-        except:
-            scroll_pos = 0
-            
-        start_idx = int(scroll_pos * total_items)
-        start_idx = max(0, min(start_idx, total_items - self.visible_items))
+        # Update scrollbar position
+        if total_items > 0:
+            start = self.scroll_offset / total_items
+            end = (self.scroll_offset + self.visible_items) / total_items
+            self.route_scrollbar.set(start, end)
         
         for i, btn in enumerate(self.button_pool):
-            route_idx = start_idx + i
+            route_idx = self.scroll_offset + i
             if route_idx < total_items:
                 route = self.filtered_routes[route_idx]
                 is_active = route['shape_id'] in self.active_layers
@@ -297,17 +311,15 @@ class GTFSMapApp(ctk.CTk):
                     command=lambda r=route: self.toggle_route(r),
                     state="normal"
                 )
-                btn.place(x=5, y=route_idx * self.item_height, relwidth=0.95)
             else:
                 btn.configure(text="", state="disabled", fg_color="transparent")
-                btn.place_forget()
 
     def filter_routes(self, event=None):
         """Filters the route list and resets virtual scroll."""
         if not self.processor: return
         query = self.search_entry.get().lower()
         self.filtered_routes = [r for r in self.all_routes if query in r['display_name'].lower()]
-        self.route_canvas.yview_moveto(0)
+        self.scroll_offset = 0
         self._update_virtual_scroll()
 
     def toggle_route(self, route: Dict):
