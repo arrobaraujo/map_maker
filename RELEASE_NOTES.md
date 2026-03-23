@@ -1,4 +1,4 @@
-# Release Notes - v1.2.0 🚀
+# Release Notes - v1.1.0 🚀
 
 Esta versão foca em **estilização automática**, **interoperabilidade** e **performance extrema**.
 
@@ -18,8 +18,8 @@ Esta versão foca em **estilização automática**, **interoperabilidade** e **p
 ## Como gerar o novo release?
 1. Clique em **Releases** no seu repositório GitHub.
 2. Clique em **Draft a new release**.
-3. Tag: `v1.2.0`
-4. Título: `v1.2.0 - GTFS Professional Upgrade`
+3. Tag: `v1.1.0`
+4. Título: `v1.1.0 - GTFS Professional Upgrade`
 5. Cole as notas acima na descrição.
 6. Anexe o seu arquivo `.exe` gerado.
 
