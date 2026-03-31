@@ -23,9 +23,10 @@ ENV/
 *.gpkg
 *.geojson
 
-# IDE
+# IDE / Tools
 .vscode/
 .idea/
+.kilocode/
 *.swp
 *.swo
 
