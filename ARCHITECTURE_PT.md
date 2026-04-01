@@ -9,17 +9,30 @@
 ```
 map_maker/
 ├── src/                        # Código-fonte principal
-│   ├── app.py                  # Interface gráfica (GUI) – ponto de entrada
+│   ├── app.py                  # Orquestrador principal da aplicação
 │   ├── processor.py            # Processamento e indexação de dados GTFS
+│   ├── controllers/            # Orquestração de ações da interface
+│   │   ├── map_controller.py
+│   │   └── gtfs_controller.py
+│   ├── services/               # Regras de negócio reutilizáveis
+│   │   ├── layer_service.py
+│   │   ├── zoom_service.py
+│   │   └── export_service.py
+│   ├── ui/
+│   │   └── ui_builder.py       # Construção da interface
 │   └── utils/
 │       └── renderer.py         # Renderização de mapas (exportação transparente, simplificação)
 ├── tests/
-│   └── test_processor.py       # Testes automatizados (pytest)
+│   ├── test_processor.py       # Testes do motor GTFS
+│   ├── test_services.py        # Testes de regras de camada/zoom
+│   ├── test_export_service.py  # Testes de exportação
+│   ├── test_map_controller.py  # Testes do controller de mapa
+│   └── test_gtfs_controller.py # Testes do controller de carregamento GTFS
 ├── map_tiles_cache/            # Cache local de tiles do mapa (SQLite)
 ├── requirements.txt            # Dependências Python
 ├── app.spec                    # Configuração do PyInstaller para gerar .exe
 ├── LICENSE                     # Licença GPL-3.0
-├── README.md / README_EN.md    # Documentação principal (PT / EN)
+├── README.md / README_PT.md    # Documentação principal (EN / PT)
 ├── DISTRIBUTION_PT.md / DISTRIBUTION_EN.md  # Guia de distribuição
 ├── RELEASE_NOTES.md            # Histórico de versões
 └── .gitignore
@@ -29,25 +42,43 @@ map_maker/
 
 ## 🧩 Módulos e Responsabilidades
 
-### `src/app.py` — Interface Gráfica (GUI)
+### `src/app.py` — Orquestrador da Aplicação
 
 | Classe / Função       | Responsabilidade |
 |------------------------|------------------|
 | `GTFSMapApp`           | Classe principal da aplicação. Herda de `ctk.CTk` (CustomTkinter). |
-| `setup_ui()`           | Monta toda a interface: sidebar, controles, mapa e legenda. |
-| `load_gtfs()`          | Abre o diálogo de arquivo e dispara o carregamento assíncrono (thread). |
-| `toggle_route()`       | Adiciona ou remove uma rota do mapa interativo. |
-| `select_layer()`       | Gerencia seleção de camadas (simples, Ctrl+Click, Shift+Click). |
-| `redraw_all_paths()`   | Redesenha todas as rotas no mapa respeitando ordem e estilos. |
-| `save_map()`           | Exporta o mapa como PNG, PDF ou SVG (com controle de DPI). |
-| `export_sig()`         | Exporta camadas como GeoPackage, Shapefile ou KML. |
-| `update_legend()`      | Gera a legenda flutuante com agrupamento inteligente por cor. |
+| `setup_ui()`           | Delega a construção de interface para o módulo de UI. |
+| `load_gtfs()`          | Aciona carregamento assíncrono via controller GTFS. |
+| `toggle_route()`       | Delega adição/remoção de rota ao controller de mapa. |
+| `save_map()`           | Coordena exportação de imagem (PNG/PDF/SVG). |
+| `export_sig()`         | Coordena exportação SIG (GeoPackage/Shapefile/KML). |
 
 **Destaques de Design:**
 - **Virtual Scrolling** na lista de rotas para suportar milhares de linhas sem travamento.
 - **Seleção múltipla** com Ctrl/Shift para estilização em lote.
 - **Zoom fracionário (0.1)** implementado via botões +/- e campo de entrada.
 - **High DPI Awareness** via Windows `SetProcessDpiAwareness`.
+
+---
+
+### `src/ui/ui_builder.py` — Construção da Interface
+
+Responsável por montar os widgets e ligar callbacks da aplicação.
+
+---
+
+### `src/controllers/` — Camada de Orquestração
+
+- `map_controller.py`: operações de camadas e mapa (toggle, reorder, redraw, fit, estilo).
+- `gtfs_controller.py`: ciclo de carregamento GTFS em thread de fundo.
+
+---
+
+### `src/services/` — Regras de Negócio
+
+- `layer_service.py`: seleção/reordenação de camadas e montagem da legenda.
+- `zoom_service.py`: parse e limite de zoom.
+- `export_service.py`: geração e gravação de KML/SVG/SIG.
 
 ---
 

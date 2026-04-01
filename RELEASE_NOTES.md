@@ -1,3 +1,30 @@
+# Release Notes - v1.4.0
+
+Esta versao consolida uma grande refatoracao arquitetural para melhorar manutencao, testabilidade e evolucao do projeto.
+
+## O que ha de novo?
+
+### Arquitetura modular
+- Extracao da construcao de interface para `src/ui/ui_builder.py`.
+- Criacao de controllers para orquestracao de fluxo:
+    - `src/controllers/map_controller.py`
+    - `src/controllers/gtfs_controller.py`
+- Criacao de services para regras de dominio:
+    - `src/services/layer_service.py`
+    - `src/services/zoom_service.py`
+    - `src/services/export_service.py`
+
+### Melhorias tecnicas
+- `app.py` simplificado e mais focado em coordenacao de UI.
+- Menor acoplamento entre interface, regras de negocio e exportacao.
+- Otimizacao de reordenacao de camada para evitar redraw desnecessario quando nao ha mudanca.
+
+### Qualidade e testes
+- Expansao da cobertura com novos testes unitarios para services e controllers.
+- Suite atualizada com cenarios de exportacao, selecao de camadas, zoom, fluxo GTFS e controle de mapa.
+
+---
+
 # Release Notes - v1.3.0
 
 Esta versão adiciona suporte a Docker com GUI no navegador, melhorias de estabilidade e documentação em inglês para arquitetura e contribuição.

@@ -46,12 +46,19 @@ Antes de contribuir, familiarize-se com a arquitetura do projeto lendo o [ARCHIT
 
 ```
 src/
-├── app.py              # Interface gráfica (GUI) – CustomTkinter
+├── app.py              # Orquestrador principal da aplicação
 ├── processor.py        # Motor de processamento GTFS (Pandas + SQLite)
+├── controllers/        # Orquestração de ações da interface
+├── services/           # Regras de negócio (camadas, zoom, exportação)
+├── ui/                 # Módulo de construção da interface
 └── utils/
     └── renderer.py     # Renderização de mapas e utilidades geométricas
 tests/
-└── test_processor.py   # Testes automatizados (pytest)
+├── test_processor.py
+├── test_services.py
+├── test_export_service.py
+├── test_map_controller.py
+└── test_gtfs_controller.py
 ```
 
 ---
@@ -127,8 +134,11 @@ git push origin feature/exportacao-geojson
 
 ### Organização
 
-- **GUI** (`app.py`): Toda lógica de interface e interação do usuário.
+- **Orquestração** (`app.py`): Coordenação de eventos e fluxo da aplicação.
+- **Controllers** (`controllers/`): Orquestração entre UI e regras de negócio.
+- **Serviços** (`services/`): Regras de camada, zoom e exportação.
 - **Dados** (`processor.py`): Processamento GTFS, I/O de dados, SQLite.
+- **UI** (`ui/`): Construção da interface.
 - **Utilidades** (`utils/`): Funções auxiliares reutilizáveis (renderização, algoritmos).
 - **Testes** (`tests/`): Espelham a estrutura de `src/`.
 

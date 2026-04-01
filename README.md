@@ -35,6 +35,7 @@ If you just want to run the app without installing Python:
 2. Install dependencies:
    ```bash
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 3. Run the application:
    ```bash
@@ -80,8 +81,11 @@ To create a single `.exe` file for Windows:
 ## 📂 Project Structure
 
 - `src/`: Source code.
-  - `app.py`: Main interface (GUI).
-  - `processor.py`: GTFS logic.
-  - `utils/renderer.py`: Map rendering.
+   - `app.py`: Main app orchestrator.
+   - `processor.py`: GTFS processing engine.
+   - `controllers/`: UI action orchestration (map + GTFS flow).
+   - `services/`: Domain rules (layers, zoom, exports).
+   - `ui/`: UI building module.
+   - `utils/renderer.py`: Rendering helpers.
 - `tests/`: Automated tests (`pytest`).
 - `map_tiles_cache/`: Offline map cache.

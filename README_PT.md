@@ -34,6 +34,7 @@ Se você quer apenas rodar o aplicativo sem precisar instalar o Python:
 2. Instale as dependências:
    ```bash
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 3. Execute a aplicação:
    ```bash
@@ -79,8 +80,11 @@ Para criar um arquivo único `.exe` para Windows:
 ## 📂 Estrutura do Projeto
 
 - `src/`: Código fonte.
-  - `app.py`: Interface principal (GUI).
-  - `processor.py`: Lógica GTFS.
-  - `utils/renderer.py`: Renderização de mapas.
+   - `app.py`: Orquestrador principal da aplicação.
+   - `processor.py`: Motor de processamento GTFS.
+   - `controllers/`: Orquestração de ações da UI (mapa + fluxo GTFS).
+   - `services/`: Regras de negócio (camadas, zoom, exportações).
+   - `ui/`: Módulo de construção da interface.
+   - `utils/renderer.py`: Funções de renderização.
 - `tests/`: Testes automatizados (`pytest`).
 - `map_tiles_cache/`: Cache de mapas offline.

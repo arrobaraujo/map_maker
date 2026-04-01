@@ -46,12 +46,19 @@ Before contributing, review architecture details in [ARCHITECTURE.md](ARCHITECTU
 
 ```text
 src/
-├── app.py              # GUI (CustomTkinter)
+├── app.py              # Main app orchestrator
 ├── processor.py        # GTFS processing engine (Pandas + SQLite)
+├── controllers/        # UI action orchestration
+├── services/           # Domain logic (layers, zoom, exports)
+├── ui/                 # UI builder module
 └── utils/
     └── renderer.py     # Map rendering and geometry utilities
 tests/
-└── test_processor.py   # Automated tests (pytest)
+├── test_processor.py
+├── test_services.py
+├── test_export_service.py
+├── test_map_controller.py
+└── test_gtfs_controller.py
 ```
 
 ---
@@ -129,9 +136,12 @@ Conventional Commits quick reference:
 
 ### Organization
 
-- app.py: UI and user interaction.
+- app.py: app orchestration and event coordination.
+- controllers/: workflow orchestration between UI and services.
+- services/: reusable business rules and exports.
 - processor.py: GTFS processing, data I/O, SQLite access.
-- utils/: reusable utilities.
+- ui/: widget construction and layout.
+- utils/: rendering helpers.
 - tests/: mirrors src modules where possible.
 
 ### Best practices

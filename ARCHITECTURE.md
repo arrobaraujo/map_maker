@@ -9,12 +9,25 @@ Internal structure, data flow, and design decisions.
 ```text
 map_maker/
 ├── src/
-│   ├── app.py                  # GUI entry point
+│   ├── app.py                  # Main app orchestrator
 │   ├── processor.py            # GTFS processing and indexing
+│   ├── controllers/            # UI action orchestration
+│   │   ├── map_controller.py
+│   │   └── gtfs_controller.py
+│   ├── services/               # Domain logic and reusable workflows
+│   │   ├── layer_service.py
+│   │   ├── zoom_service.py
+│   │   └── export_service.py
+│   ├── ui/
+│   │   └── ui_builder.py
 │   └── utils/
 │       └── renderer.py         # Map rendering and geometry simplification
 ├── tests/
-│   └── test_processor.py
+│   ├── test_processor.py
+│   ├── test_services.py
+│   ├── test_export_service.py
+│   ├── test_map_controller.py
+│   └── test_gtfs_controller.py
 ├── map_tiles_cache/            # Local map tile cache (SQLite)
 ├── requirements.txt
 ├── app.spec                    # PyInstaller spec
@@ -30,17 +43,27 @@ map_maker/
 
 ## Modules and Responsibilities
 
-### src/app.py - GUI
+### src/app.py - Application orchestrator
 
-- GTFSMapApp: main application class.
-- setup_ui(): builds sidebar, map area, controls, and legend.
-- load_gtfs(): opens file picker and loads GTFS in a background thread.
-- toggle_route(): adds/removes route layers on the map.
-- select_layer(): supports single selection plus Ctrl/Shift multi-select behavior.
-- redraw_all_paths(): redraws layers preserving order and style.
-- save_map(): exports current map to PNG, PDF, or SVG with DPI options.
-- export_sig(): exports active layers as GeoPackage, Shapefile, or KML.
-- update_legend(): renders grouped floating legend.
+- GTFSMapApp: main class that coordinates UI, controllers, and services.
+- setup_ui(): delegates widget construction to the UI module.
+- Handles interaction bindings and user feedback (dialogs/messages).
+
+### src/ui/ui_builder.py - UI composition
+
+- build_main_ui(app): builds all widgets and binds callbacks.
+- Keeps visual structure isolated from domain logic.
+
+### src/controllers - orchestration layer
+
+- map_controller.py: map/layer operations (toggle, remove, reorder, redraw, fit, style).
+- gtfs_controller.py: GTFS load lifecycle and background thread flow.
+
+### src/services - domain and reusable logic
+
+- layer_service.py: layer metadata, selection, reorder, legend row computation.
+- zoom_service.py: zoom parsing/clamping rules.
+- export_service.py: KML/SVG/vector export generation and persistence.
 
 Design highlights:
 
@@ -135,7 +158,7 @@ Output binary is generated under dist/.
 
 ## Testing
 
-Current tests are under tests/ and focus on processor behavior.
+Current tests are under tests/ and cover processor, services, exports, and controllers.
 
 Run tests:
 
