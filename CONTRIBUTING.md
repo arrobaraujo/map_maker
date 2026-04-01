@@ -1,203 +1,202 @@
-# Contribuindo – GTFS Map Maker
+# Contributing - GTFS Map Maker
 
-Obrigado pelo interesse em contribuir! Este documento descreve as diretrizes e o fluxo de trabalho para contribuições ao projeto.
-
----
-
-## 📋 Pré-requisitos
-
-- **Python**: 3.10 ou superior
-- **Git**: Controle de versão
-- **Sistema Operacional**: Windows (recomendado para testes completos com GUI e PyInstaller)
+Thank you for your interest in contributing. This document describes guidelines and workflow for project contributions.
 
 ---
 
-## 🚀 Configuração do Ambiente
+## Prerequisites
 
-1. **Clone o repositório:**
+- Python: 3.10+
+- Git
+- Operating System: Windows recommended for full GUI + PyInstaller validation
+
+---
+
+## Environment Setup
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/arrobaraujo/map_maker.git
    cd map_maker
    ```
 
-2. **Crie e ative um ambiente virtual:**
+2. Create and activate a virtual environment:
    ```bash
    python -m venv .venv
    .venv\Scripts\activate     # Windows
    # source .venv/bin/activate  # Linux/macOS
    ```
 
-3. **Instale as dependências:**
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 
-4. **Execute a aplicação:**
+4. Run the app:
    ```bash
    python src/app.py
    ```
 
 ---
 
-## 📂 Estrutura do Projeto
+## Project Structure
 
-Antes de contribuir, familiarize-se com a arquitetura do projeto lendo o [ARCHITECTURE.md](ARCHITECTURE.md).
+Before contributing, review architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-```
+```text
 src/
-├── app.py              # Interface gráfica (GUI) – CustomTkinter
-├── processor.py        # Motor de processamento GTFS (Pandas + SQLite)
+├── app.py              # GUI (CustomTkinter)
+├── processor.py        # GTFS processing engine (Pandas + SQLite)
 └── utils/
-    └── renderer.py     # Renderização de mapas e utilidades geométricas
+    └── renderer.py     # Map rendering and geometry utilities
 tests/
-└── test_processor.py   # Testes automatizados (pytest)
+└── test_processor.py   # Automated tests (pytest)
 ```
 
 ---
 
-## 🔄 Fluxo de Contribuição
+## Contribution Workflow
 
-### 1. Crie uma branch
+### 1. Create a branch
 
-Crie uma branch a partir de `main` com um nome descritivo:
+Create a descriptive branch from main:
 
 ```bash
-git checkout -b feature/nome-da-feature
-git checkout -b fix/descricao-do-bug
-git checkout -b docs/descricao-da-mudanca
+git checkout -b feature/your-feature
+git checkout -b fix/bug-description
+git checkout -b docs/doc-change
 ```
 
-**Convenção de nomes:**
-| Prefixo     | Uso                          |
-|-------------|------------------------------|
-| `feature/`  | Nova funcionalidade          |
-| `fix/`      | Correção de bug              |
-| `refactor/` | Refatoração (sem mudar comportamento) |
-| `docs/`     | Apenas documentação          |
-| `test/`     | Adição ou melhoria de testes |
+Branch naming convention:
 
-### 2. Desenvolva e teste
+| Prefix     | Usage                                   |
+|------------|------------------------------------------|
+| feature/   | New feature                              |
+| fix/       | Bug fix                                  |
+| refactor/  | Refactor (no behavior change)            |
+| docs/      | Documentation only                       |
+| test/      | New or improved tests                    |
 
-- Faça suas alterações seguindo as [diretrizes de código](#-diretrizes-de-código).
-- Adicione ou atualize testes quando aplicável.
-- Rode os testes antes de enviar:
+### 2. Develop and test
+
+- Follow coding guidelines.
+- Add or update tests when applicable.
+- Run tests before opening your PR:
   ```bash
   pytest tests/ -v
   ```
 
-### 3. Commit e Push
+### 3. Commit and push
 
-Use mensagens de commit descritivas:
+Use descriptive commit messages:
 
 ```bash
 git add .
-git commit -m "feat: adiciona exportação em formato GeoJSON"
-git push origin feature/exportacao-geojson
+git commit -m "feat: add GeoJSON export"
+git push origin feature/geojson-export
 ```
 
-**Formato de commits (Conventional Commits):**
-| Prefixo     | Uso                                            |
-|-------------|------------------------------------------------|
-| `feat:`     | Nova funcionalidade                            |
-| `fix:`      | Correção de bug                                |
-| `refactor:` | Refatoração de código                          |
-| `docs:`     | Mudanças na documentação                       |
-| `test:`     | Adição ou correção de testes                   |
-| `style:`    | Formatação, espaçamento (sem mudança de lógica)|
-| `chore:`    | Tarefas de manutenção (deps, configs, CI)      |
+Conventional Commits quick reference:
 
-### 4. Abra um Pull Request
+| Prefix     | Usage                                           |
+|------------|--------------------------------------------------|
+| feat:      | New feature                                     |
+| fix:       | Bug fix                                         |
+| refactor:  | Code refactor                                   |
+| docs:      | Documentation changes                           |
+| test:      | New or updated tests                            |
+| style:     | Formatting changes (no logic changes)           |
+| chore:     | Maintenance tasks (deps, config, CI, etc.)      |
 
-- Abra um PR para a branch `main`.
-- Descreva claramente as mudanças realizadas.
-- Inclua capturas de tela se a alteração afetar a interface.
-- Referencie issues relacionadas (ex: `Closes #12`).
+### 4. Open a Pull Request
 
----
-
-## 📝 Diretrizes de Código
-
-### Estilo
-
-- **PEP 8**: Siga o guia de estilo Python padrão.
-- **Type Hints**: Use anotações de tipo em funções e métodos (ex: `def foo(x: int) -> str:`).
-- **Docstrings**: Todas as classes e funções públicas devem ter docstrings descritivas.
-- **Logging**: Use o módulo `logging` — nunca `print()` para debug.
-
-### Organização
-
-- **GUI** (`app.py`): Toda lógica de interface e interação do usuário.
-- **Dados** (`processor.py`): Processamento GTFS, I/O de dados, SQLite.
-- **Utilidades** (`utils/`): Funções auxiliares reutilizáveis (renderização, algoritmos).
-- **Testes** (`tests/`): Espelham a estrutura de `src/`.
-
-### Boas práticas
-
-- Mantenha funções pequenas e focadas (responsabilidade única).
-- Evite dependências globais; passe estado via parâmetros.
-- Operações pesadas (I/O, processamento) devem ser executadas em threads separadas para não bloquear a GUI.
-- Ao adicionar widgets na UI, mantenha a consistência visual com o tema Dark existente.
+- Open a PR against main.
+- Clearly explain what changed and why.
+- Include screenshots for UI changes.
+- Reference issues when applicable (for example: Closes #12).
 
 ---
 
-## 🧪 Testes
+## Coding Guidelines
 
-### Executando os testes
+### Style
+
+- Follow PEP 8.
+- Use type hints for functions and methods.
+- Public classes/functions should include clear docstrings.
+- Use logging for diagnostics instead of print().
+
+### Organization
+
+- app.py: UI and user interaction.
+- processor.py: GTFS processing, data I/O, SQLite access.
+- utils/: reusable utilities.
+- tests/: mirrors src modules where possible.
+
+### Best practices
+
+- Keep functions small and focused.
+- Avoid hidden global state.
+- Run expensive operations (I/O, processing) off the UI thread.
+- Keep UI visual consistency.
+
+---
+
+## Tests
+
+Run:
 
 ```bash
 pytest tests/ -v
 ```
 
-### Diretrizes para testes
+Test guidelines:
 
-- Nomeie testes com o padrão `test_<modulo>_<comportamento>`.
-- Teste cenários de sucesso **e** de falha.
-- Para testes que precisem de dados GTFS, crie arquivos `.zip` mínimos de amostra em `tests/fixtures/`.
-- A GUI não deve ser testada diretamente via pytest; foque nos módulos `processor` e `utils`.
+- Use names in the format test_<module>_<behavior>.
+- Cover success and failure scenarios.
+- For GTFS-dependent tests, add minimal fixtures under tests/fixtures/.
+- Avoid direct GUI testing in pytest. Focus on processor and utils.
 
 ---
 
-## 📦 Gerando o Executável
+## Build the Executable
 
-Para verificar se suas alterações funcionam no formato distribuível:
+To validate your changes in distributable format:
 
 ```bash
 pip install pyinstaller
-python -m PyInstaller --noconsole --onefile \
-    --add-data ".venv/Lib/site-packages/customtkinter;customtkinter/" \
-    src/app.py
+pyinstaller app.spec
 ```
 
-O executável será gerado em `dist/app.exe`.
+The generated executable will be available in dist/.
 
 ---
 
-## 🐛 Reportando Bugs
+## Reporting Bugs
 
-Ao abrir uma issue de bug, inclua:
+When opening a bug issue, include:
 
-1. **Versão do Python** e **sistema operacional**.
-2. **Passos para reproduzir** o problema.
-3. **Comportamento esperado** vs **comportamento observado**.
-4. **Logs de erro** (se disponíveis).
-5. **Arquivo GTFS usado** (se possível e não confidencial).
-
----
-
-## 💡 Sugerindo Funcionalidades
-
-Abra uma issue com a tag `enhancement` e descreva:
-
-1. **O problema** que a funcionalidade resolve.
-2. **A solução proposta** (com detalhes técnicos, se possível).
-3. **Alternativas consideradas**.
+1. Python version and OS.
+2. Steps to reproduce.
+3. Expected behavior versus observed behavior.
+4. Error logs, if available.
+5. GTFS sample file used, if shareable.
 
 ---
 
-## 📜 Licença
+## Feature Requests
 
-Ao contribuir, você concorda que suas contribuições serão licenciadas sob a [GNU GPL v3](LICENSE), a mesma licença do projeto.
+Open an issue tagged enhancement and include:
+
+1. The problem to solve.
+2. Proposed solution.
+3. Alternatives considered.
 
 ---
 
-Agradecemos sua contribuição! 🎉
+## License
+
+By contributing, you agree that your contributions are licensed under [GNU GPL v3](LICENSE), the same project license.
+
+Thank you for contributing.

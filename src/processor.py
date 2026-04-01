@@ -34,6 +34,7 @@ class GTFSProcessor:
         
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.cursor = self.conn.cursor()
+        self._closed = False
         self._setup_db()
         
         atexit.register(lambda: self.close())
@@ -66,45 +67,50 @@ class GTFSProcessor:
         try:
             with zipfile.ZipFile(self.zip_path, 'r') as z:
                 file_list = z.namelist()
+
+                required_files = {'routes.txt', 'trips.txt', 'shapes.txt'}
+                missing = sorted(required_files.difference(file_list))
+                if missing:
+                    missing_csv = ", ".join(missing)
+                    raise ValueError(f"Invalid GTFS ZIP. Missing required files: {missing_csv}")
                 
                 # Load routes - Include colors
-                if 'routes.txt' in file_list:
-                    with z.open('routes.txt') as f:
-                        available_cols = pd.read_csv(z.open('routes.txt'), nrows=0).columns
-                        use_cols = [c for c in ['route_id', 'route_short_name', 'route_long_name', 'route_color', 'route_text_color'] if c in available_cols]
-                        self.routes = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'route_short_name': str}, 
-                                                encoding='utf-8-sig', on_bad_lines='skip')
-                    logger.info(f"Loaded {len(self.routes)} routes.")
+                with z.open('routes.txt') as f:
+                    available_cols = pd.read_csv(f, nrows=0).columns
+                with z.open('routes.txt') as f:
+                    use_cols = [c for c in ['route_id', 'route_short_name', 'route_long_name', 'route_color', 'route_text_color'] if c in available_cols]
+                    self.routes = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'route_short_name': str}, 
+                                            encoding='utf-8-sig', on_bad_lines='skip')
+                logger.info(f"Loaded {len(self.routes)} routes.")
                 
                 # Load trips - Only essential columns
-                if 'trips.txt' in file_list:
-                    with z.open('trips.txt') as f:
-                        available_cols = pd.read_csv(z.open('trips.txt'), nrows=0).columns
-                        use_cols = [c for c in ['route_id', 'trip_id', 'shape_id', 'trip_headsign', 'direction_id'] if c in available_cols]
-                        self.trips = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'shape_id': str}, 
-                                               encoding='utf-8-sig', on_bad_lines='skip')
-                    logger.info(f"Loaded {len(self.trips)} trips.")
+                with z.open('trips.txt') as f:
+                    available_cols = pd.read_csv(f, nrows=0).columns
+                with z.open('trips.txt') as f:
+                    use_cols = [c for c in ['route_id', 'trip_id', 'shape_id', 'trip_headsign', 'direction_id'] if c in available_cols]
+                    self.trips = pd.read_csv(f, usecols=use_cols, dtype={'route_id': str, 'shape_id': str}, 
+                                           encoding='utf-8-sig', on_bad_lines='skip')
+                logger.info(f"Loaded {len(self.trips)} trips.")
                 
                 # Load shapes -> DIRECT TO SQLITE
-                if 'shapes.txt' in file_list:
-                    logger.info("Processing shapes into SQLite (this may take a moment for large files)...")
-                    with z.open('shapes.txt') as f:
-                        # Process in chunks to keep memory low
-                        chunk_iter = pd.read_csv(f, chunksize=100000, dtype={'shape_id': str}, encoding='utf-8-sig')
-                        for chunk in chunk_iter:
-                            # Map essential columns
-                            available_cols = chunk.columns
-                            mapping = {
-                                'shape_id': 'shape_id',
-                                'shape_pt_lat': 'lat',
-                                'shape_pt_lon': 'lon',
-                                'shape_pt_sequence': 'sequence'
-                            }
-                            data_to_insert = chunk[[c for c in mapping.keys() if c in available_cols]].rename(columns=mapping)
-                            data_to_insert.to_sql('shapes', self.conn, if_exists='append', index=False)
-                    
-                    self.conn.commit()
-                    logger.info("Shapes indexed in SQLite.")
+                logger.info("Processing shapes into SQLite (this may take a moment for large files)...")
+                with z.open('shapes.txt') as f:
+                    # Process in chunks to keep memory low
+                    chunk_iter = pd.read_csv(f, chunksize=100000, dtype={'shape_id': str}, encoding='utf-8-sig')
+                    for chunk in chunk_iter:
+                        # Map essential columns
+                        available_cols = chunk.columns
+                        mapping = {
+                            'shape_id': 'shape_id',
+                            'shape_pt_lat': 'lat',
+                            'shape_pt_lon': 'lon',
+                            'shape_pt_sequence': 'sequence'
+                        }
+                        data_to_insert = chunk[[c for c in mapping.keys() if c in available_cols]].rename(columns=mapping)
+                        data_to_insert.to_sql('shapes', self.conn, if_exists='append', index=False)
+                
+                self.conn.commit()
+                logger.info("Shapes indexed in SQLite.")
         except Exception as e:
             logger.error(f"Error loading GTFS data: {e}")
             raise
@@ -155,6 +161,8 @@ class GTFSProcessor:
 
     def close(self):
         """Closes the DB connection and removes the temporary file."""
+        if self._closed:
+            return
         try:
             if hasattr(self, 'conn'):
                 self.conn.close()
@@ -163,3 +171,5 @@ class GTFSProcessor:
                 logger.info("Temporary shapes database removed.")
         except Exception as e:
             logger.error(f"Error closing GTFSProcessor: {e}")
+        finally:
+            self._closed = True

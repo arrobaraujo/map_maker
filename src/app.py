@@ -22,6 +22,8 @@ from utils.renderer import render_transparent_map, simplify_path, decimal_to_osm
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+APP_VERSION = "1.3.0"
+
 # High DPI awareness for Windows
 try:
     from ctypes import windll
@@ -37,7 +39,7 @@ class GTFSMapApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("GTFS Map Maker")
+        self.title(f"GTFS Map Maker v{APP_VERSION}")
         self.geometry("1400x900")
         
         # Open maximized on Windows (delayed to ensure it stays)
@@ -46,6 +48,7 @@ class GTFSMapApp(ctk.CTk):
         # Application State
         self.processor: Optional[GTFSProcessor] = None
         self.all_routes: List[Dict] = []
+        self.filtered_routes: List[Dict] = []
         self.active_layers: Dict[str, Dict[str, Any]] = {}
         self.selected_layer_ids: set[str] = set()
 
@@ -61,7 +64,17 @@ class GTFSMapApp(ctk.CTk):
         self.db_path = os.path.join(self.tile_cache_dir, "offline_tiles.db")
 
         self.setup_ui()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         logger.info("Application initialized.")
+
+    def _on_close(self):
+        """Ensures resources are released before the app exits."""
+        try:
+            if self.processor is not None:
+                self.processor.close()
+        except Exception:
+            logger.exception("Failed to close processor cleanly")
+        self.destroy()
 
     def setup_ui(self):
         """Sets up the graphical user interface components."""
@@ -199,8 +212,7 @@ class GTFSMapApp(ctk.CTk):
                 try:
                     # Clear old processor if exists
                     if self.processor is not None:
-                        if hasattr(self, 'processor') and self.processor is not None:
-                            self.processor.close()
+                        self.processor.close()
                         
                     new_processor = GTFSProcessor(file_path)
                     
@@ -373,6 +385,7 @@ class GTFSMapApp(ctk.CTk):
         if shape_id in self.active_layers:
             if self.active_layers[shape_id].get('path_obj'):
                 self.active_layers[shape_id]['path_obj'].delete()
+            del self.active_layers[shape_id]
             if shape_id in self.selected_layer_ids:
                 self.selected_layer_ids.remove(shape_id)
             self.refresh_layer_list()
@@ -405,7 +418,6 @@ class GTFSMapApp(ctk.CTk):
     def adjust_zoom(self, delta):
         """Increments or decrements the zoom by delta."""
         current_zoom = float(self.map_widget.zoom)
-        new_zoom = max(1.0, min(19.0, current_zoom + delta))
         new_zoom = max(1.0, min(19.0, current_zoom + delta))
         self.map_widget.set_zoom(round(new_zoom, 1))
         self.after(200, self.sync_zoom_from_map)

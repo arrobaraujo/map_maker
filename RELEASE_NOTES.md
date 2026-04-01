@@ -1,3 +1,32 @@
+# Release Notes - v1.3.0
+
+Esta versão adiciona suporte a Docker com GUI no navegador, melhorias de estabilidade e documentação em inglês para arquitetura e contribuição.
+
+## O que ha de novo?
+
+### Docker e Execucao
+- Adicionado `Dockerfile` com runtime de GUI baseado em Xvfb + x11vnc + noVNC.
+- Adicionado `docker-compose.yml` para subir o app com um comando.
+- Acesso web da interface em `http://localhost:6080/vnc.html`.
+- Volume para persistir cache de tiles (`map_tiles_cache`).
+
+### Melhorias no App
+- Corrigido bug de remocao de camada que mantinha estado residual em memoria.
+- Removida duplicacao no ajuste de zoom.
+- Melhorado encerramento do app para liberar recursos do processador GTFS.
+
+### Melhorias no Processamento
+- Validacao explicita de arquivos obrigatorios no GTFS (`routes.txt`, `trips.txt`, `shapes.txt`).
+- Fechamento idempotente do `GTFSProcessor` para evitar erros em chamadas repetidas.
+
+### Documentacao
+- Criado `CONTRIBUTING.md` em ingles.
+- Criado `ARCHITECTURE.md` em ingles.
+- README em PT e EN atualizados com instrucoes de Docker e build do executavel.
+- Adicionado script `scripts/build_exe.ps1` para gerar o `.exe` com `app.spec`.
+
+---
+
 # Release Notes - v1.2.0 🎯
 
 Esta versão traz o **Zoom Fracionário Estabilizado** e melhorias significativas na **Interface de Camadas**.

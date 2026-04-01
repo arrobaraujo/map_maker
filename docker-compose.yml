@@ -1,0 +1,14 @@
+services:
+  map-maker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: map-maker
+    ports:
+      - "6080:6080"
+      - "5901:5901"
+    volumes:
+      - ./map_tiles_cache:/app/map_tiles_cache
+    environment:
+      - NOVNC_PORT=6080
+      - VNC_PORT=5901
